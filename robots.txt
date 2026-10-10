@@ -1,0 +1,8 @@
+# floating point · www.flt.pt
+# everyone is welcome: search engines, ai assistants and their crawlers alike.
+# a summary for language models lives at /llms.txt
+
+User-agent: *
+Allow: /
+
+Sitemap: https://www.flt.pt/sitemap.xml
