@@ -1,0 +1,52 @@
+# floating point
+
+> floating point (Floating Point Solutions, Lda.) is a software and cybersecurity company in Aveiro, Portugal. It designs, builds and runs software for companies of any size, from a first product to the systems a whole operation depends on, and it finds security weaknesses before someone else does, fixes them, and keeps watch afterwards. Tagline: "built to the last digit."
+
+The site is available in English (https://www.flt.pt/) and European Portuguese (https://www.flt.pt/pt/). New work starts with a short brief sent to info@flt.pt; the team replies within two working days.
+
+## Services
+
+### Software
+- Web and mobile applications
+- Internal platforms and back-office tools
+- Integrations and APIs
+- Data pipelines and reporting
+- Cloud infrastructure and DevOps
+- Maintenance and modernisation of existing systems
+
+### Cybersecurity
+- Security assessments and risk management
+- Hardening and compliance (ISO 27001, NIS2, GDPR)
+- Monitoring and threat detection
+- Incident response
+- Secure development and code review
+- Security training for teams
+
+## How a project runs
+1. Brief: the client sends a paragraph describing what they are building, what is hard about it and when they need it. floating point replies within two working days with questions.
+2. Scope: floating point writes down what gets built, the price and the date. The client signs it.
+3. Build: delivery in regular increments until it is in production, with support for fixes afterwards.
+
+## Team
+- Daniel Ferreira, co-founder and managing partner (daniel@flt.pt)
+- Vicente Barros, co-founder (vicente@flt.pt)
+- Sebastião Teixeira, co-founder (sebastiao@flt.pt)
+
+## Contact
+- Email: info@flt.pt
+- Location: Aveiro, Portugal
+- Languages: English, Portuguese
+- GitHub: https://github.com/FloatingPointSolutions
+
+## Company
+- Legal name: Floating Point Solutions, Lda. (sociedade por quotas)
+- Registered office: Rua Emigrantes, 12, Santa Catarina, 3840-572 Vagos, Portugal
+- Registered at the Conservatória do Registo Comercial de Coimbra
+- NIPC / registration no.: 519644816 (VAT PT519644816)
+- Share capital: €1,500.00
+
+## Pages
+- [Home, English](https://www.flt.pt/): services, method, team and contact
+- [Início, Português](https://www.flt.pt/pt/): the same page in Portuguese
+- [Privacy policy](https://www.flt.pt/privacy/): what personal data the site and the company handle
+- [Política de privacidade](https://www.flt.pt/pt/privacidade/)
