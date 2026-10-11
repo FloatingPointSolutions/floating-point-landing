@@ -11,7 +11,7 @@
 :root {
   --paper:    #f5f3ee;
   --mist:     #e8e5dd;
-  --fog:      #9a9a9e;
+  --fog:      #6f6c76;   /* 4.7:1 on paper, so the small labels pass aa */
   --ink-soft: #2a2730;
   --ink:      #15141a;
   --rule:      rgba(20, 20, 26, 0.10);
@@ -409,6 +409,10 @@ section { scroll-margin-top: 64px; }
 .field input:focus, .field textarea:focus { outline: none; border-bottom-color: var(--ink); }
 .form-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 8px; }
 .form-note { font-size: 13px; color: var(--fog); }
+/* shown after the mailto handoff, for browsers with no mail handler */
+.form-copy { font-size: 13px; color: var(--ink-soft); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--rule); }
+.form-copy:hover { text-decoration-color: var(--ink); }
+.form-copy[hidden] { display: none; }
 .form-sent { grid-column: 1 / -1; font-size: 15px; color: var(--ink-soft); }
 
 /* footer */

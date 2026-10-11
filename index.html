@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- github pages sends no security headers, so the policy lives here. the sha256 is the hash of the
+     inline script below: if that script changes, the hash has to change with it or the script is blocked. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-fSIvXrqqXKIKoI4ZvKtJ7VZzWbGLp39L4P8kGm2ScjY='; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <script>
   /* portuguese browsers land on /pt/ unless someone picked english on the switch.
      the switch remembers the pick in local storage; nothing else is kept. */
@@ -129,9 +133,9 @@
       },
       "sameAs": ["https://github.com/FloatingPointSolutions"]
     },
-    { "@type": "Person", "@id": "https://www.flt.pt/#daniel-ferreira", "name": "Daniel Ferreira", "jobTitle": "Co-founder and managing partner", "email": "daniel.ferreira@flt.pt", "worksFor": { "@id": "https://www.flt.pt/#org" } },
-    { "@type": "Person", "@id": "https://www.flt.pt/#vicente-barros", "name": "Vicente Barros", "jobTitle": "Co-founder", "email": "vicente.barros@flt.pt", "worksFor": { "@id": "https://www.flt.pt/#org" } },
-    { "@type": "Person", "@id": "https://www.flt.pt/#sebastiao-teixeira", "name": "Sebastião Teixeira", "jobTitle": "Co-founder", "email": "sebastiao.teixeira@flt.pt", "worksFor": { "@id": "https://www.flt.pt/#org" } },
+    { "@type": "Person", "@id": "https://www.flt.pt/#daniel-ferreira", "name": "Daniel Ferreira", "jobTitle": "Co-founder and managing partner", "email": "info@flt.pt", "worksFor": { "@id": "https://www.flt.pt/#org" } },
+    { "@type": "Person", "@id": "https://www.flt.pt/#vicente-barros", "name": "Vicente Barros", "jobTitle": "Co-founder", "email": "info@flt.pt", "worksFor": { "@id": "https://www.flt.pt/#org" } },
+    { "@type": "Person", "@id": "https://www.flt.pt/#sebastiao-teixeira", "name": "Sebastião Teixeira", "jobTitle": "Co-founder", "email": "info@flt.pt", "worksFor": { "@id": "https://www.flt.pt/#org" } },
     {
       "@type": "WebSite",
       "@id": "https://www.flt.pt/#website",
@@ -294,6 +298,8 @@
       <form class="form" id="form" novalidate
             data-need="name, email and the brief are needed."
             data-handed="handed to your mail client. if nothing opened, write to info@flt.pt."
+            data-copied="copied. paste it into an email to info@flt.pt."
+            data-copy-failed="could not copy. select the text above and copy it yourself."
             data-subject="brief from ">
         <div class="field">
           <label for="f-name">name</label>
@@ -314,6 +320,7 @@
         <div class="form-actions">
           <button class="cta" type="submit"><span>send the brief</span> <span class="dot" aria-hidden="true"></span></button>
           <span class="form-note" id="form-note">opens in your mail client. nothing is stored here.</span>
+          <button class="form-copy" type="button" id="form-copy" hidden>or copy the brief</button>
         </div>
       </form>
     </div>
