@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- github pages sends no security headers, so the policy lives here. the sha256 is the hash of the
+     inline script below: if that script changes, the hash has to change with it or the script is blocked. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-0kiILZ/yudXDLuGZfcS3TX+xgIU3VqVBwJ0QVKW8oaE='; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <script>
   document.addEventListener('click', function (e) {
     var a = e.target.closest && e.target.closest('[data-lang]');

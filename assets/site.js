@@ -9,6 +9,8 @@
      ------------------------------------------------------------------ */
   const form = document.getElementById('form');
   const note = document.getElementById('form-note');
+  const copyBtn = document.getElementById('form-copy');
+  let composed = '';
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = new FormData(form);
@@ -19,8 +21,22 @@
     if (!name || !email || !brief) { note.textContent = form.dataset.need; return; }
     const subject = form.dataset.subject + name + (company ? ' · ' + company : '');
     const body = brief + '\n\n' + name + '\n' + email + (company ? '\n' + company : '');
+    composed = body;
     window.location.href = 'mailto:info@flt.pt?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
     note.textContent = form.dataset.handed;
+    // a browser with no mail handler does nothing visible on a mailto link,
+    // so offer the composed text back instead of letting the brief go to waste
+    copyBtn.hidden = false;
+  });
+  copyBtn.addEventListener('click', () => {
+    const done = () => { note.textContent = form.dataset.copied; };
+    const fallback = () => {
+      const brief = document.getElementById('f-brief');
+      brief.focus(); brief.select();
+      note.textContent = form.dataset.copyFailed;
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(composed).then(done, fallback);
+    else fallback();
   });
 
   /* ------------------------------------------------------------------
