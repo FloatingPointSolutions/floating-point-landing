@@ -28,9 +28,9 @@ The site is available in English (https://www.flt.pt/) and European Portuguese (
 3. Build: delivery in regular increments until it is in production, with support for fixes afterwards.
 
 ## Team
-- Daniel Ferreira, co-founder and managing partner (daniel@flt.pt)
-- Vicente Barros, co-founder (vicente@flt.pt)
-- Sebastião Teixeira, co-founder (sebastiao@flt.pt)
+- Daniel Ferreira, co-founder and managing partner (daniel.ferreira@flt.pt)
+- Vicente Barros, co-founder (vicente.barros@flt.pt)
+- Sebastião Teixeira, co-founder (sebastiao.teixeira@flt.pt)
 
 ## Contact
 - Email: info@flt.pt
