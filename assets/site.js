@@ -42,10 +42,17 @@
   /* ------------------------------------------------------------------
      the line: 30° w to 45° e, a tick every 5 degrees, a taller one every 15
      ------------------------------------------------------------------ */
-  const geoMarkEl = document.getElementById('geo-mark'), geoHost = document.getElementById('geo');
-  const placeGeoMark = () => { geoMarkEl.style.left = (Math.round(geoHost.clientWidth * 0.2847) + 0.5) + 'px'; };
-  placeGeoMark();
-  window.addEventListener('resize', placeGeoMark);
+  const geoHost = document.getElementById('geo');
+  const lonX = (lon) => Math.round(geoHost.clientWidth * (lon + 30) / 75) + 0.5;   // on the pixel grid, so hairlines stay crisp
+  const geoMarks = Array.from(document.querySelectorAll('.geo-mark'));
+  const geoSpan = document.getElementById('geo-span');
+  const placeGeoMarks = () => {
+    geoMarks.forEach((m) => { const x = lonX(parseFloat(m.dataset.lon)); m.style.left = x + 'px'; m.style.setProperty('--mx', x + 'px'); });   // --mx: the room a label has to its left
+    const a = lonX(parseFloat(geoSpan.dataset.from)), b = lonX(parseFloat(geoSpan.dataset.to));
+    geoSpan.style.left = a + 'px'; geoSpan.style.width = (b - a) + 'px';
+  };
+  placeGeoMarks();
+  window.addEventListener('resize', placeGeoMarks);
 
   const ticksEl = document.getElementById('geo-ticks');
   for (let deg = -30; deg <= 45; deg += 5) {
@@ -53,6 +60,13 @@
     t.className = 'geo-tick' + (deg % 15 === 0 ? ' major' : '');
     t.style.left = ((deg + 30) / 75 * 100) + '%';
     ticksEl.appendChild(t);
+    if (deg % 15 === 0) {
+      const d = document.createElement('span');
+      d.className = 'geo-deg' + (deg === -30 ? ' is-first' : deg === 45 ? ' is-last' : '');   // the two end labels stay inside the line
+      d.style.left = t.style.left;
+      d.textContent = deg === 0 ? '0°' : Math.abs(deg) + '° ' + (deg < 0 ? 'w' : 'e');
+      ticksEl.appendChild(d);
+    }
   }
 
   /* ------------------------------------------------------------------
@@ -314,17 +328,28 @@
     yPercent: 110, duration: 0.9, ease: 'power3.out', stagger: 0.07
   });
 
-  // studio: the line draws across, then the aveiro mark lands on it
+  // studio: the line draws across; as it passes each longitude a mark lands there, and the
+  // span over europe is drawn under it, closed at both ends
   const DRAW = 2.2;
-  gsap.timeline({ scrollTrigger: { trigger: '#geo', start: 'top 92%', end: 'top 55%', scrub: 0.6 } })
+  const at = (lon) => DRAW * (lon + 30) / 75;
+  const land = (tl, sel, t) => tl
+    .from(sel + ' .geo-dot', { y: -40, opacity: 0, scaleY: 1.3, scaleX: 0.8, duration: 0.55, ease: 'power2.in' }, t)
+    .to(sel + ' .geo-dot', { scaleY: 0.78, scaleX: 1.22, duration: 0.1, ease: 'power2.in' }, '>')
+    .to(sel + ' .geo-dot', { scaleY: 1, scaleX: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.45)' }, '>')
+    .from(sel + ' .geo-stem', { scaleY: 0, duration: 0.5, ease: 'power2.out' }, '<0.05')
+    .from(sel + ' .geo-label', { opacity: 0, y: 8, duration: 0.7, ease: 'power2.out' }, '<0.15');
+  const geoTl = gsap.timeline({ scrollTrigger: { trigger: '#geo', start: 'top 92%', end: 'top 55%', scrub: 0.6 } })
     .from('#geo-line', { scaleX: 0, duration: DRAW, ease: 'power2.inOut' }, 0)
     .from('.geo-tick', { scaleY: 0, opacity: 0, duration: 0.5, ease: 'power2.out',
       stagger: { each: DRAW / 16, ease: 'power2.inOut' } }, 0.05)
-    .from('#geo-mark .geo-dot', { y: -40, opacity: 0, scaleY: 1.3, scaleX: 0.8, duration: 0.55, ease: 'power2.in' }, DRAW * 0.2847 + 0.05)
-    .to('#geo-mark .geo-dot', { scaleY: 0.78, scaleX: 1.22, duration: 0.1, ease: 'power2.in' }, '>')
-    .to('#geo-mark .geo-dot', { scaleY: 1, scaleX: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.45)' }, '>')
-    .from('#geo-mark .geo-stem', { scaleY: 0, duration: 0.5, ease: 'power2.out' }, '<0.05')
-    .from('#geo-mark .geo-label', { opacity: 0, y: 8, duration: 0.7, ease: 'power2.out' }, '<0.15');
+    .from('.geo-deg', { opacity: 0, duration: 0.5, ease: 'power2.out', stagger: { each: DRAW * 3 / 16 } }, 0.3);
+  land(geoTl, '#geo-mark', at(-8.6538) + 0.05);
+  land(geoTl, '#geo-mark-utc', at(0) + 0.05);
+  geoTl
+    .from('#geo-span .geo-span-end.is-l', { scaleY: 0, opacity: 0, duration: 0.3, ease: 'power2.out' }, at(-10) + 0.1)
+    .from('#geo-span .geo-span-line', { scaleX: 0, duration: at(40) - at(-10), ease: 'none' }, at(-10) + 0.1)
+    .from('#geo-span .geo-span-end.is-r', { scaleY: 0, opacity: 0, duration: 0.3, ease: 'power2.out' }, at(40) + 0.1)
+    .from('#geo-span .geo-span-label', { opacity: 0, y: 8, duration: 0.7, ease: 'power2.out' }, at(40) + 0.2);
 
   // brief form: fields settle in
   gsap.from('.form .field, .form .form-actions', {

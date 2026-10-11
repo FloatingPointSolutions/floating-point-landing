@@ -345,8 +345,10 @@ section { scroll-margin-top: 64px; }
   max-width: 14ch;
 }
 .studio .statement { margin-top: 28px; font-size: 19px; line-height: 1.45; color: var(--mist); max-width: 44ch; }
-/* one continuous line across the panel, 30° w to 45° e; the dot sits at aveiro's longitude (8.65° w) */
-.geo { position: relative; margin-top: clamp(64px, 10vh, 120px); height: 72px; }
+/* one continuous line across the panel, 30° w to 45° e. three things sit on it: a mark at
+   aveiro's longitude (8.65° w), a mark on the meridian, and a span over europe (10° w to 40° e) */
+.geo { position: relative; margin-top: calc(clamp(64px, 10vh, 120px) + 56px); height: 84px; }
+@media (max-width: 960px) { .geo { margin-top: calc(clamp(64px, 10vh, 120px) + 76px); } }   /* room for the aveiro label on two lines */
 .geo-line {
   position: absolute; left: 0; right: 0; top: 0;
   height: 1px; background: rgba(245, 243, 238, 0.35);
@@ -359,18 +361,39 @@ section { scroll-margin-top: 64px; }
   transform-origin: top center;
 }
 .geo-tick.major { height: 16px; background: rgba(245, 243, 238, 0.55); }
-/* the mark is a point held above the line by one hairline */
-.geo-mark { position: absolute; top: 0; left: 28.47%; width: 0; height: 0; }
+.geo-deg {
+  position: absolute; top: 22px; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  color: rgba(245, 243, 238, 0.45); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.geo-deg.is-first { transform: none; }
+.geo-deg.is-last { transform: translateX(-100%); }
+/* each mark is a point held above the line by one hairline, its label beside the stem */
+.geo-mark { position: absolute; top: 0; width: 0; height: 0; }
 .geo-stem { position: absolute; left: 0; top: -16px; width: 1px; height: 16px; background: var(--paper); transform: translateX(-50%); transform-origin: 50% 0; }
-.geo-dot { visibility: hidden; position: absolute; left: -6px; top: -28px; width: 12px; height: 12px; border-radius: 50%; background: var(--paper); transform-origin: 50% 100%; }
-.geo-label { position: absolute; left: 0; top: 14px; transform: translateX(-50%); font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; color: var(--mist); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.people { margin-top: 48px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; max-width: 900px; }
+.geo-dot { position: absolute; left: -6px; top: -28px; width: 12px; height: 12px; border-radius: 50%; background: var(--paper); transform-origin: 50% 100%; }
+#geo-mark .geo-dot { visibility: hidden; }   /* the orb takes this one's place */
+.geo-label {
+  position: absolute; bottom: 38px;   /* anchored above the dot, so a wrapped label grows upward */
+  font-size: 16px; font-weight: 500; line-height: 1.25; color: var(--paper); white-space: nowrap;
+}
+.geo-label.is-l { right: 12px; text-align: right; white-space: normal; width: max-content; max-width: calc(var(--mx, 9999px) - 32px); }   /* 12px off the stem, 20px off the edge */
+.geo-label.is-r { left: 12px; }
+/* the span: a second hairline under the ticks, closed at both ends, its label centred */
+.geo-span { position: absolute; top: 48px; height: 0; }
+.geo-span-line { position: absolute; left: 0; right: 0; top: 0; height: 1px; background: rgba(245, 243, 238, 0.45); transform-origin: left center; }
+.geo-span-end { position: absolute; top: -5px; width: 1px; height: 11px; background: rgba(245, 243, 238, 0.6); transform-origin: 50% 100%; }
+.geo-span-end.is-l { left: 0; }
+.geo-span-end.is-r { right: 0; }
+.geo-span-label {
+  position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+  font-size: 16px; font-weight: 500; line-height: 1.25; color: var(--paper); white-space: nowrap;
+}
+/* the same three points as plain text: read by screen readers, shown on narrow screens where the line has no room for labels */
+.people { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .person { display: flex; gap: 14px; align-items: flex-start; }
 .person .dot { flex: none; width: 10px; height: 10px; margin-top: 7px; border-radius: 50%; background: var(--paper); }
 .person .name { font-size: 16px; font-weight: 500; color: var(--paper); }
-.person .role { font-size: 13px; color: rgba(245, 243, 238, 0.55); margin-top: 2px; }
-.person a { font-family: var(--mono); font-size: 12px; color: var(--mist); display: inline-block; margin-top: 8px; border-bottom: 1px solid var(--rule-on-ink); }
-.person a:hover { border-color: var(--paper); }
 
 /* brief */
 .brief-grid {
@@ -465,12 +488,16 @@ footer { border-top: 1px solid var(--rule); padding-block: 48px 40px; }
   .steps { --n-col: 40px; --n-gap: 20px; }
   .step h3 { font-size: 24px; }
 }
+@media (max-width: 720px) {
+  .people { position: static; width: auto; height: auto; overflow: visible; clip: auto; clip-path: none; white-space: normal; margin-top: 40px; display: grid; gap: 16px; }
+  .geo { margin-top: clamp(48px, 8vh, 96px); height: 48px; }
+  .geo-label, .geo-deg, .geo-span { display: none; }
+}
 @media (max-width: 600px) {
   .nav { display: none; }
   .hero h1 { font-size: clamp(64px, 22vw, 120px); }
   .bits { grid-template-columns: repeat(16, 1fr); }
   .form { grid-template-columns: 1fr; }
-  .people { grid-template-columns: 1fr; }
   .foot-grid { grid-template-columns: 1fr; }
 }
 

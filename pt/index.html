@@ -265,13 +265,24 @@
         <div class="person"><span class="dot" aria-hidden="true"></span><div><div class="name">utc+0</div></div></div>
       </div>
     </div>
-    <div class="geo" id="geo" role="img" aria-label="aveiro, 40,6405 graus norte, 8,6538 graus oeste">
+    <div class="geo" id="geo" aria-hidden="true">
       <span class="geo-line" id="geo-line"></span>
-      <span class="geo-ticks" id="geo-ticks" aria-hidden="true"></span>
-      <span class="geo-mark" id="geo-mark">
+      <span class="geo-ticks" id="geo-ticks"></span>
+      <span class="geo-span" id="geo-span" data-from="-10" data-to="40">
+        <span class="geo-span-line"></span>
+        <span class="geo-span-end is-l"></span>
+        <span class="geo-span-end is-r"></span>
+        <span class="geo-span-label">clientes em toda a europa</span>
+      </span>
+      <span class="geo-mark" id="geo-mark" data-lon="-8.6538">
         <span class="geo-stem"></span>
         <span class="geo-dot"></span>
-        <span class="geo-label">aveiro, 40.6405° n, 8.6538° w</span>
+        <span class="geo-label is-l">engenheiros, não vendedores</span>
+      </span>
+      <span class="geo-mark" id="geo-mark-utc" data-lon="0">
+        <span class="geo-stem"></span>
+        <span class="geo-dot"></span>
+        <span class="geo-label is-r">utc+0</span>
       </span>
     </div>
   </section>
