@@ -9,6 +9,7 @@ The site is available in English (https://www.flt.pt/) and European Portuguese (
 ### Software
 - Web and mobile applications
 - Internal platforms and back-office tools
+- Digitisation of high-cost processes
 - Integrations and APIs
 - AI features and LLM integrations (assistants, document processing, search over a company's own data)
 - Data pipelines and reporting
