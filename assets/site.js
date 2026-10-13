@@ -1009,7 +1009,7 @@
 
       // a lift: a hairline car rises from under the word with the dot inside, an up-arrow over it,
       // and eases to a stop with its floor on the baseline. the doors slide apart into the walls,
-      // the dot is there, and the car carries on down without it
+      // the dot is there, and the car fades away around it
       elevator(r) {
         const CW = 0.34 * E, CH = 0.5 * E;                   // the car: just clear of the g, tall enough for the dot and some headroom
         const car = svgEl('g', {}, r.svg);
@@ -1022,10 +1022,11 @@
         const inner = svgEl('g', { 'clip-path': 'url(#intro-lift-doors)' }, doors);
         const dl = svgEl('rect', { class: 'solid', x: f2(-CW / 2), y: f2(-CH), width: f2(CW / 2), height: f2(CH) }, inner);
         const dr = svgEl('rect', { class: 'solid', x: 0, y: f2(-CH), width: f2(CW / 2), height: f2(CH) }, inner);
-        const st = { y: 0.9 * E, dy: 0.9 * E, bob: 0, op: 0, open: 0, aop: 1 };
+        const st = { y: 0.9 * E, dy: 0.9 * E, bob: 0, op: 0, open: 0, aop: 1, cop: 1 };
         const render = () => {
           const ty = 'translate(0 ' + f2(r.rr + st.y + st.bob) + ')';   // the car's floor sits on the baseline when y is 0
           car.setAttribute('transform', ty); doors.setAttribute('transform', ty);
+          car.setAttribute('opacity', f2(st.cop)); doors.setAttribute('opacity', f2(st.cop));
           arrow.setAttribute('opacity', f2(st.aop));
           dl.setAttribute('transform', 'translate(' + f2(-st.open * CW / 2) + ' 0)');
           dr.setAttribute('transform', 'translate(' + f2(st.open * CW / 2) + ' 0)');
@@ -1040,7 +1041,7 @@
           .to(st, { bob: 0, duration: 0.3, ease: 'elastic.out(1, 0.5)' }, UP + 0.12)
           .to(st, { aop: 0, duration: 0.2, ease: 'power1.in' }, UP)                // the arrow goes out
           .to(st, { open: 1, duration: 0.45, ease: 'power2.inOut' }, UP + 0.25)   // the doors part
-          .to(st, { y: 0.9 * E, duration: 0.55, ease: 'power2.in' }, UP + 1.0);    // and the car goes on down without it
+          .to(st, { cop: 0, duration: 0.45, ease: 'power1.in' }, UP + 0.95);      // and the car is simply gone
         render();
         return { tl, land: UP + 0.25, rest: UP + 0.8 };
       }
