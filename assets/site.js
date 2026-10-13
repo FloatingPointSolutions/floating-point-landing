@@ -669,35 +669,32 @@
           rail.push({ x: xs[i], y });
           if (tit && Math.hypot(xs[i] - tit.x, y - tit.y) <= R + tit.r) break;   // it has reached the tittle
         }
-        // the way in: a drop from above the f that bends over it and settles onto the rail at the
-        // crest of the l. anchored to the letters, so it stays inside the page at every width
+        // the way in: a fall from above and a little left of the f, on a slant, that bends over the
+        // f and lands on the rail at the crest of the l. anchored to the letters, so it stays
+        // inside the page at every width
         const lx = (word.letters.find((l) => l.ch === 'l') || word.letters[0]).x, fx = word.letters[0].x;
         let j = rail.findIndex((q) => q.x >= lx); if (j < 0 || j > rail.length - 20) j = 0;
-        const join = rail[j], top = { x: fx, y: join.y - 1.1 * fs };
+        const join = rail[j], top = { x: fx - 0.35 * fs, y: join.y - 1.1 * fs };
         const drop = [];
-        for (let k = 0; k < 60; k++) drop.push(bez(top, { x: fx, y: join.y - 0.35 * fs }, { x: join.x - 0.3 * fs, y: join.y - 0.02 * fs }, join, k / 60));
+        for (let k = 0; k < 60; k++) drop.push(bez(top, { x: fx - 0.06 * fs, y: join.y - 0.42 * fs }, { x: join.x - 0.3 * fs, y: join.y - 0.02 * fs }, join, k / 60));
         const pts = drop.concat(rail.slice(j));
         first = drop.length;
-        // the pace: a coaster's. speed grows with the drop from the highest point of the rail, so
-        // it hangs over the crests, runs through the dips, brakes on the climb to the t, and gets
-        // one last push into the tittle. the drop gathers speed gently, as if through air, and
-        // what it arrives with bleeds off over the first stretch of rail
+        // the pace: a coaster's, in one piece. the fall starts from near rest and gathers speed
+        // under its own pull, landing on the rail at VIN; from there speed follows the height
+        // below the crest it landed on, so it carries its momentum over the l, runs through the
+        // dips, brakes on the climbs, and gets one last push into the tittle
         const cum = [0];
         for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
         const length = cum[cum.length - 1];
-        let yTop = Infinity;
-        for (let i = first; i < pts.length; i++) if (pts[i].y < yTop) yTop = pts[i].y;
-        const V0 = 1.2 * fs, GRAV = 30 * fs;                 // px/s at a crest, and px/s² of fall
-        const vIn = 1.8 * V0;                                // what the drop arrives with
+        const V0 = 0.6 * fs, VIN = 2.4 * fs, GRAV = 20 * fs;   // px/s at the top of the fall, px/s landing on the rail, px/s² along it
+        const yTop = pts[0].y, yJoin = pts[first].y;
+        const GFALL = (VIN * VIN - V0 * V0) / (2 * Math.max(1, yJoin - yTop));   // the fall's pull, so it lands at exactly VIN
         const tim = [0];
         for (let i = 1; i < pts.length; i++) {
           const y = (pts[i].y + pts[i - 1].y) / 2;
-          let v;
-          if (i <= first) v = V0 * (0.9 + 0.9 * smooth(i / first));
-          else {
-            v = Math.sqrt(V0 * V0 + 2 * GRAV * Math.max(0, y - yTop));
-            v += (vIn - v) * (1 - smooth((cum[i] - cum[first]) / (0.45 * fs)));
-          }
+          let v = i <= first
+            ? Math.sqrt(V0 * V0 + 2 * GFALL * Math.max(0, y - yTop))
+            : Math.sqrt(Math.max(0.25 * VIN * VIN, VIN * VIN + 2 * GRAV * (y - yJoin)));
           if (tit) v *= 1 + 0.5 * smooth(1 - (length - cum[i]) / (0.4 * fs));   // the push, over the last bit before the tittle
           tim.push(tim[i - 1] + (cum[i] - cum[i - 1]) / v);
         }
