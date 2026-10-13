@@ -615,8 +615,9 @@
           }
           return { a, b, c1, c2, T, t0, t1: t0 + T };
         };
-        const flyAt = (f, t) => {
-          const u = Math.min(1, Math.max(0, t / f.T)), p = bez(f.a, f.c1, f.c2, f.b, u * u * (3 - 2 * u));
+        const flyAt = (f, t) => {                            // flicked off fast, a hang at the top, then the fall
+          const u = Math.min(1, Math.max(0, t / f.T)), e = u < 0.5 ? 0.5 * (1 - (1 - 2 * u) * (1 - 2 * u)) : 0.5 + 0.5 * (2 * u - 1) * (2 * u - 1);
+          const p = bez(f.a, f.c1, f.c2, f.b, e);
           p.r = f.a.r + (f.b.r - f.a.r) * u;
           return p;
         };
@@ -657,15 +658,28 @@
           pts.push({ x: xs[i], y });
           if (tit && Math.hypot(xs[i] - tit.x, y - tit.y) <= R + tit.r) break;   // it has reached the tittle
         }
+        // the pace: a coaster's. speed grows with the drop from the highest point of the line, so
+        // it hangs over the crests, runs through the dips, brakes on the climb to the t, and gets
+        // one last push into the tittle. the way in is a steady glide
         const cum = [0];
         for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
         const length = cum[cum.length - 1];
-        const HOLD = 0.25, ROLL = Math.min(1.9, Math.max(1.0, length / (3 * fs)));   // about three em a second
+        let yTop = Infinity;
+        for (let i = first; i < pts.length; i++) if (pts[i].y < yTop) yTop = pts[i].y;
+        const V0 = 1.3 * fs, GRAV = 40 * fs;                 // px/s at a crest, and px/s² of fall
+        const tim = [0];
+        for (let i = 1; i < pts.length; i++) {
+          const y = (pts[i].y + pts[i - 1].y) / 2;
+          let v = i <= first ? 3 * fs : Math.sqrt(V0 * V0 + 2 * GRAV * Math.max(0, y - yTop));
+          if (tit) v *= 1 + 0.6 * smooth(1 - (length - cum[i]) / (0.4 * fs));   // the push, over the last bit before the tittle
+          tim.push(tim[i - 1] + (cum[i] - cum[i - 1]) / v);
+        }
+        const HOLD = 0.25, ROLL = tim[tim.length - 1];
         const tKnock = HOLD + ROLL;
         const along = (t) => {                               // where the ride puts the ball at time t
-          const s = length * Math.min(1, Math.max(0, (t - HOLD) / ROLL));
-          let i = 1; while (i < cum.length - 1 && cum[i] < s) i++;
-          const u = (s - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+          const tt = Math.min(ROLL, Math.max(0, t - HOLD));
+          let i = 1; while (i < tim.length - 1 && tim[i] < tt) i++;
+          const u = (tt - tim[i - 1]) / ((tim[i] - tim[i - 1]) || 1);
           return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * u, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * u };
         };
         const contact = pts[pts.length - 1];
@@ -689,7 +703,7 @@
           h1.insertBefore(cover, r.rig); h1.appendChild(ball);
           small.br = (tit.corner / tit.w * 100) + '%';
           r.dot.style.borderRadius = small.br;
-          flight = arc({ x: tit.x, y: tit.y, r: tit.r }, rest, 0.6, tKnock);   // knocked clean over the n and the g
+          flight = arc({ x: tit.x, y: tit.y, r: tit.r }, rest, 0.48, tKnock);   // knocked clean over the n and the g
         } else {
           // no separate tittle in this font: the one ball rides every letter, then drops onto the period
           flight = arc({ x: contact.x, y: contact.y, r: R }, rest, 0.45, tKnock);
@@ -706,8 +720,8 @@
         };
         const tl = gsap.timeline({ onUpdate: render }).to(st, { t: end, duration: end, ease: 'none' }, 0);
         if (tit) {
-          tl.to(big, { x: tit.x, y: tit.y, s: tit.r / R, br: small.br, duration: 0.45, ease: 'power3.out' }, tKnock)   // rolls into the slot
-            .to(small, { br: '50%', duration: 0.3, ease: 'power1.out' }, tKnock);                                     // the tittle rounds off in flight
+          tl.to(big, { x: tit.x, y: tit.y, s: tit.r / R, br: small.br, duration: 0.26, ease: 'power4.out' }, tKnock)   // stops dead and drops into the slot
+            .to(small, { br: '50%', duration: 0.18, ease: 'power1.out' }, tKnock);                                    // the tittle rounds off as it goes
         }
         render();
         return { tl, land: end, rest: end };
