@@ -615,8 +615,11 @@
           }
           return { a, b, c1, c2, T, t0, t1: t0 + T };
         };
-        const flyAt = (f, t) => {                            // flicked off fast, a hang at the top, then the fall
-          const u = Math.min(1, Math.max(0, t / f.T)), e = u < 0.5 ? 0.5 * (1 - (1 - 2 * u) * (1 - 2 * u)) : 0.5 + 0.5 * (2 * u - 1) * (2 * u - 1);
+        const flyAt = (f, t) => {                            // flicked off fast, a long hover at the top, then a fall slowed by the air
+          const u = Math.min(1, Math.max(0, t / f.T));
+          let e;
+          if (u < 0.28) { const w = u / 0.28; e = 0.5 * (1 - (1 - w) * (1 - w) * (1 - w)); }
+          else { const w = (u - 0.28) / 0.72; e = 0.5 + 0.5 * w * w * (3 - 2 * w); }
           const p = bez(f.a, f.c1, f.c2, f.b, e);
           p.r = f.a.r + (f.b.r - f.a.r) * u;
           return p;
@@ -638,7 +641,7 @@
         let xMin = Infinity, xMax = -Infinity;
         word.terrain.forEach((y, x) => { if (x < xMin) xMin = x; if (x > xMax) xMax = x; });
         const WHEEL = 2.4 * R, LIFT = 0.05 * fs, GAP = 0.02 * fs;
-        const xIn = Math.round(xMin - 1.3 * fs), xOut = Math.round((tit ? tit.x : xMax) + R);
+        const xIn = Math.round(xMin - 0.6 * fs), xOut = Math.round((tit ? tit.x : xMax) + R);
         const xs = [], ys = [];
         let first = -1;
         for (let x = xIn; x <= xOut; x++) {
@@ -646,32 +649,48 @@
           xs.push(x); ys.push(y === Infinity ? NaN : y + WHEEL - R - LIFT);
           if (first < 0 && y !== Infinity) first = xs.length - 1;
         }
-        for (let i = 0; i < first; i++) ys[i] = ys[first] - 0.6 * fs * smooth((xs[first] - xs[i]) / (xs[first] - xs[0]));   // the way in: a long shallow descent
+        for (let i = 0; i < first; i++) ys[i] = ys[first];   // a level lead-in, only so the softening has something to lean on
         for (let i = first + 1; i < ys.length; i++) if (isNaN(ys[i])) ys[i] = ys[i - 1];
         const sig = 0.12 * fs, K = Math.ceil(3 * sig), kern = [];
         for (let k = -K; k <= K; k++) kern.push(Math.exp(-k * k / (2 * sig * sig)));
-        const pts = [];
-        for (let i = 0; i < xs.length; i++) {
+        const rail = [];
+        for (let i = first; i < xs.length; i++) {
           let s = 0, w = 0;
           for (let k = -K; k <= K; k++) { const j = Math.min(ys.length - 1, Math.max(0, i + k)); s += ys[j] * kern[k + K]; w += kern[k + K]; }
           const y = Math.min(s / w, ride(xs[i], R) - GAP);   // softened, but never into the ink
-          pts.push({ x: xs[i], y });
+          rail.push({ x: xs[i], y });
           if (tit && Math.hypot(xs[i] - tit.x, y - tit.y) <= R + tit.r) break;   // it has reached the tittle
         }
-        // the pace: a coaster's. speed grows with the drop from the highest point of the line, so
+        // the way in: a drop from above the f that bends over it and settles onto the rail at the
+        // crest of the l. anchored to the letters, so it stays inside the page at every width
+        const lx = (word.letters.find((l) => l.ch === 'l') || word.letters[0]).x, fx = word.letters[0].x;
+        let j = rail.findIndex((q) => q.x >= lx); if (j < 0 || j > rail.length - 20) j = 0;
+        const join = rail[j], top = { x: fx, y: join.y - 1.1 * fs };
+        const drop = [];
+        for (let k = 0; k < 60; k++) drop.push(bez(top, { x: fx, y: join.y - 0.35 * fs }, { x: join.x - 0.3 * fs, y: join.y - 0.02 * fs }, join, k / 60));
+        const pts = drop.concat(rail.slice(j));
+        first = drop.length;
+        // the pace: a coaster's. speed grows with the drop from the highest point of the rail, so
         // it hangs over the crests, runs through the dips, brakes on the climb to the t, and gets
-        // one last push into the tittle. the way in is a steady glide
+        // one last push into the tittle. the drop gathers speed gently, as if through air, and
+        // what it arrives with bleeds off over the first stretch of rail
         const cum = [0];
         for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
         const length = cum[cum.length - 1];
         let yTop = Infinity;
         for (let i = first; i < pts.length; i++) if (pts[i].y < yTop) yTop = pts[i].y;
-        const V0 = 1.3 * fs, GRAV = 40 * fs;                 // px/s at a crest, and px/s² of fall
+        const V0 = 1.2 * fs, GRAV = 30 * fs;                 // px/s at a crest, and px/s² of fall
+        const vIn = 1.8 * V0;                                // what the drop arrives with
         const tim = [0];
         for (let i = 1; i < pts.length; i++) {
           const y = (pts[i].y + pts[i - 1].y) / 2;
-          let v = i <= first ? 3 * fs : Math.sqrt(V0 * V0 + 2 * GRAV * Math.max(0, y - yTop));
-          if (tit) v *= 1 + 0.6 * smooth(1 - (length - cum[i]) / (0.4 * fs));   // the push, over the last bit before the tittle
+          let v;
+          if (i <= first) v = V0 * (0.9 + 0.9 * smooth(i / first));
+          else {
+            v = Math.sqrt(V0 * V0 + 2 * GRAV * Math.max(0, y - yTop));
+            v += (vIn - v) * (1 - smooth((cum[i] - cum[first]) / (0.45 * fs)));
+          }
+          if (tit) v *= 1 + 0.5 * smooth(1 - (length - cum[i]) / (0.4 * fs));   // the push, over the last bit before the tittle
           tim.push(tim[i - 1] + (cum[i] - cum[i - 1]) / v);
         }
         const HOLD = 0.25, ROLL = tim[tim.length - 1];
@@ -703,7 +722,7 @@
           h1.insertBefore(cover, r.rig); h1.appendChild(ball);
           small.br = (tit.corner / tit.w * 100) + '%';
           r.dot.style.borderRadius = small.br;
-          flight = arc({ x: tit.x, y: tit.y, r: tit.r }, rest, 0.48, tKnock);   // knocked clean over the n and the g
+          flight = arc({ x: tit.x, y: tit.y, r: tit.r }, rest, 1.05, tKnock);   // knocked clean over the n and the g
         } else {
           // no separate tittle in this font: the one ball rides every letter, then drops onto the period
           flight = arc({ x: contact.x, y: contact.y, r: R }, rest, 0.45, tKnock);
@@ -712,7 +731,7 @@
         const st = { t: 0 };
         const render = () => {
           const t = st.t;
-          if (t < tKnock) { put(ball, along(t), 1); ball.style.opacity = t < HOLD ? 0 : 1; }
+          if (t < tKnock) { put(ball, along(t), 1); ball.style.opacity = Math.min(1, Math.max(0, (t - HOLD) / 0.2)); }   // fades in as it starts to fall
           else if (tit) { put(ball, big, big.s); ball.style.borderRadius = big.br; }
           if (tit && t < tKnock) put(r.dot, { x: tit.x, y: tit.y }, tit.r / R);
           else { const p = flyAt(flight, t - tKnock); put(r.dot, p, p.r / R); }
