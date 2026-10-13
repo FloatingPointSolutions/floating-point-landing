@@ -142,12 +142,18 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 /* SplitText line masks clip at the line box; give descenders room without moving layout */
 .ln-mask, .line-mask { padding-bottom: 0.18em; margin-bottom: -0.18em; }
 
-/* the point travels the page on a fixed canvas; paper under a difference blend reads as ink on paper and paper on ink */
-.orb { position: fixed; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; z-index: 30; mix-blend-mode: difference; }
+/* the point travels the page as one small fixed disc; paper minus ink under a difference blend
+   reads as ink on paper and paper on ink. it is only ever scaled down from this size */
+.orb {
+  position: fixed; left: 0; top: 0; width: 64px; height: 64px;
+  border-radius: 50%; background: #e0dfd4; mix-blend-mode: difference;
+  pointer-events: none; z-index: 30; opacity: 0;
+}
 
 /* ---------- hero ---------- */
 .hero {
   position: relative;
+  overflow-x: clip;   /* the entrance can arrive from off screen */
   min-height: calc(100svh - 64px);
   display: flex;
   align-items: center;
@@ -155,6 +161,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 .hero-inner { width: 100%; padding-block: clamp(48px, 8vh, 96px); }
 .hero h1 {
+  position: relative;
   font-size: clamp(72px, 17vw, 236px);
   font-weight: 600;
   letter-spacing: -0.038em;
@@ -174,6 +181,19 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   transform-origin: 50% 100%;
   /* rests as a plain period when scripts or motion are off */
 }
+/* the entrance: a stand-in for the period, laid over it, and whatever brings it in,
+   drawn in ink hairlines on paper. the svg's origin is the dot's centre at rest */
+.intro-rig { position: absolute; pointer-events: none; color: var(--ink); }
+.intro-dot { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); transform-origin: 50% 100%; }
+.intro-dot.is-ghost { opacity: 0; }
+.intro-dot.is-fog { background: var(--fog); }
+.intro-svg { position: absolute; left: 50%; top: 50%; overflow: visible; }
+.intro-svg * { vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
+.intro-svg .hair { fill: none; stroke: currentColor; stroke-width: var(--hair, 1.5px); }
+.intro-svg .hair.double { stroke-width: calc(var(--hair, 1.5px) * 2); }
+.intro-svg .solid { fill: var(--paper); stroke: currentColor; stroke-width: var(--hair, 1.5px); }
+.intro-svg .cloud-fill { fill: var(--paper); stroke: none; }
+.intro-svg .soft, .intro-svg .soft .hair { stroke-opacity: 0.5; }
 .hero-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -218,13 +238,14 @@ section { scroll-margin-top: 64px; }
 
 /* services */
 .services { position: relative; overflow: hidden; }
+/* one screen tall plus a margin above and below; the script slides it along the section */
 .services .field {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
+  position: absolute; left: 0; top: 0;
+  width: 100%; height: calc(100vh + 200px); height: calc(100lvh + 200px);
   display: block;
   pointer-events: none;
 }
-.services > .wrap { position: relative; }
+.services > .wrap { position: relative; will-change: transform, opacity; }
 .offers {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -239,6 +260,7 @@ section { scroll-margin-top: 64px; }
 /* both marks keep the same box so the two columns stay level; the shell around the
    second one is drawn on the overlay and needs the room above and below */
 .mark { position: relative; width: 56px; height: 56px; margin-block: 18px 38px; }
+.mark .wire { position: absolute; left: 50%; top: 50%; width: 84px; height: 84px; margin: -42px 0 0 -42px; pointer-events: none; }
 .mark-dot { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); transform: translate(-50%, -50%); }
 .offer h3 {
   font-size: 28px;
