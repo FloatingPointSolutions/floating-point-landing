@@ -78,7 +78,7 @@
       if (coarse && window.innerWidth === lastW) return;
       lastW = window.innerWidth;
       placeGeoMarks();
-      document.querySelectorAll('.intro-keep').forEach((n) => n.remove());   // the bounce's stand-ins are sized to the old layout
+      dropKeeps();   // the bounce's stand-ins are sized to the old layout
     }, 120);
   });
 
@@ -114,9 +114,17 @@
   gsap.set([heroLines, heroReveal], { autoAlpha: 0 });
 
   const fontsIn = document.fonts && document.fonts.load
-    ? Promise.race([document.fonts.load('600 1em Inter').then(() => document.fonts.ready), new Promise((r) => setTimeout(r, 800))]).catch(() => {})
+    ? Promise.race([document.fonts.load('600 1em Inter').then(() => document.fonts.ready), new Promise((r) => setTimeout(r, 2000))]).catch(() => {})
     : Promise.resolve();
-  fontsIn.then(start);
+  // the bounce leaves its stand-ins on the page, measured against the glyphs. if the font came
+  // in after that, they sit in the wrong place: take them away once the entrance is over and
+  // let the real glyph show. the resize path does the same
+  const dropKeeps = () => document.querySelectorAll('.intro-keep').forEach((n) => n.remove());
+  let fontsLate = false, introOver = false;
+  fontsIn.then(() => {
+    if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { fontsLate = true; if (introOver) dropKeeps(); });
+    start();
+  });
 
   function start() {
     const smooth = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
@@ -963,6 +971,8 @@
       gsap.set(period, { clearProps: 'all' });
       if (rig) rig.dot.remove();
       takeover();
+      introOver = true;
+      if (fontsLate) dropKeeps();
     }, null, intro.rest);
     if (rig) boot.call(() => rig.rig.remove(), null, Math.max(intro.rest, intro.tl.duration()) + 0.01);
 
