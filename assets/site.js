@@ -2,6 +2,7 @@
   'use strict';
 
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
 
   /* ------------------------------------------------------------------
      brief form: compose a mailto, nothing leaves the page otherwise.
@@ -52,7 +53,6 @@
     geoSpan.style.left = a + 'px'; geoSpan.style.width = (b - a) + 'px';
   };
   placeGeoMarks();
-  window.addEventListener('resize', placeGeoMarks);
 
   const ticksEl = document.getElementById('geo-ticks');
   for (let deg = -30; deg <= 45; deg += 5) {
@@ -69,462 +69,800 @@
     }
   }
 
+  // one debounced resize path. on touch screens a change of height alone is the
+  // address bar coming and going, and nothing here depends on it
+  let lastW = window.innerWidth, rt;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => {
+      if (coarse && window.innerWidth === lastW) return;
+      lastW = window.innerWidth;
+      placeGeoMarks();
+    }, 120);
+  });
+
   /* ------------------------------------------------------------------
-     header hairline
+     header hairline. sy is the scroll position the motion below reads, so
+     nothing in the frame loop has to ask the layout for it.
      ------------------------------------------------------------------ */
   const header = document.getElementById('header');
-  function onScroll(y) { header.classList.toggle('is-scrolled', y > 8); }
-  window.addEventListener('scroll', () => onScroll(window.scrollY), { passive: true });
+  let sy = window.scrollY, scrolled = null;
+  function onScroll(y) {
+    sy = y;
+    const s = y > 8;
+    if (s !== scrolled) { scrolled = s; header.classList.toggle('is-scrolled', s); }
+  }
+  const onWindowScroll = () => onScroll(window.scrollY);
+  onWindowScroll();
+  window.addEventListener('scroll', onWindowScroll, { passive: true });
 
   /* ------------------------------------------------------------------
      motion. all of it is skipped under prefers-reduced-motion.
      ------------------------------------------------------------------ */
   if (reduced || !window.gsap) return;
   gsap.registerPlugin(ScrollTrigger, SplitText);
+  ScrollTrigger.config({ ignoreMobileResize: true });
 
-  // smooth scroll
-  let lenis = null;
-  if (window.Lenis) {
-    lenis = new Lenis({ lerp: 0.14, smoothWheel: true });
-    lenis.on('scroll', (e) => { ScrollTrigger.update(); onScroll(e.scroll); });
-    gsap.ticker.add((t) => lenis.raf(t * 1000));
-    gsap.ticker.lagSmoothing(0);
-    document.querySelectorAll('a[href^="#"]').forEach(a => {
-      a.addEventListener('click', (ev) => {
-        const id = a.getAttribute('href');
-        const target = id === '#top' ? 0 : document.querySelector(id);
-        if (target === null) return;
-        ev.preventDefault();
-        lenis.scrollTo(target, { offset: -64, duration: 1.1 });
-      });
-    });
-  }
-
-  // the field. points drift in three depths behind the services, shift with the
-  // cursor, slide with the scroll, and settle into a grid as you read through.
-  const fieldHost = document.getElementById('services');
-  const canvas = document.getElementById('field');
-  const ctx = canvas.getContext('2d');
-  const coarse = window.matchMedia('(pointer: coarse)').matches;
-  const field = { w: 0, h: 0, dpr: 1, p: 0, mx: 0, my: 0, tx: 0, ty: 0, dots: [], t: 0, k: -1 };
-
-  function sizeField() {
-    const r = fieldHost.getBoundingClientRect();
-    field.dpr = Math.min(2, window.devicePixelRatio || 1);
-    field.w = r.width; field.h = r.height;
-    canvas.width = Math.round(r.width * field.dpr);
-    canvas.height = Math.round(r.height * field.dpr);
-    ctx.setTransform(field.dpr, 0, 0, field.dpr, 0, 0);
-    // one point per grid cell; the grid is where they end up
-    const cell = coarse ? 92 : 76;
-    const cols = Math.max(4, Math.floor(r.width / cell));
-    const rows = Math.max(4, Math.floor(r.height / cell));
-    const n = Math.min(220, cols * rows);
-    const ox = (r.width - (cols - 1) * cell) / 2, oy = (r.height - (rows - 1) * cell) / 2;
-    const keep = field.dots;
-    field.dots = [];
-    for (let i = 0; i < n; i++) {
-      const prev = keep[i];
-      const z = [0.35, 0.65, 1][i % 3];
-      field.dots.push({
-        x: prev ? prev.x : Math.random(), y: prev ? prev.y : Math.random(), z,
-        gx: ox + (i % cols) * cell, gy: oy + Math.floor(i / cols) * cell,
-        r: 0.9 + z * 1.5, a: 0.12 + z * 0.26,
-        ph: prev ? prev.ph : Math.random() * Math.PI * 2,
-        sp: prev ? prev.sp : 0.004 + Math.random() * 0.006,
-        amp: prev ? prev.amp : 0.004 + Math.random() * 0.008,
-        vx: prev ? prev.vx : (Math.random() - 0.5) * 0.004, px: 0, py: 0
-      });
-    }
-    // the point's seat: the grid point nearest the upper right, held steady
-    let best = 0, bd = 1e9;
-    field.dots.forEach((d, i) => { const dd = Math.hypot(d.gx - r.width * 0.86, d.gy - r.height * 0.3); if (dd < bd) { bd = dd; best = i; } });
-    field.k = best;
-    const seat = field.dots[best]; seat.x = seat.gx / r.width; seat.y = seat.gy / r.height; seat.vx = 0; seat.amp *= 0.4;
-  }
-  const smooth = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
-  function drawField(dt) {
-    field.t += dt;
-    field.mx += (field.tx - field.mx) * 0.06;
-    field.my += (field.ty - field.my) * 0.06;
-    const p = field.p;
-    const k = smooth((p - 0.25) / 0.45);          // scatter -> grid through the middle of the section
-    const fade = smooth(p / 0.12) * (1 - smooth((p - 0.9) / 0.1));
-    ctx.clearRect(0, 0, field.w, field.h);
-    ctx.fillStyle = '#2a2730';
-    field.dots.forEach((d, i) => {
-      d.x += d.vx * dt; if (d.x < -0.02) d.x = 1.02; if (d.x > 1.02) d.x = -0.02;
-      const wob = Math.sin(field.t * d.sp * 60 + d.ph) * d.amp;
-      const fx = (d.x + wob) * field.w + field.mx * d.z * 26;
-      const fy = (d.y + wob * 0.6) * field.h + field.my * d.z * 16 - (p - 0.5) * 140 * d.z;
-      d.px = fx + (d.gx + field.mx * 8 - fx) * k;
-      d.py = fy + (d.gy - fy) * k;
-      if (i === field.k) return;                       // the point sits here
-      const a = d.a * fade * (1 - k * 0.35);
-      if (a <= 0.005) return;
-      ctx.globalAlpha = a;
-      ctx.beginPath();
-      ctx.arc(d.px, d.py, d.r * (1 - k * 0.3), 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-  }
-  sizeField();
-  let fieldVisible = false;
-  new IntersectionObserver((es) => { fieldVisible = es[0].isIntersecting; }).observe(fieldHost);
-  gsap.ticker.add((t, dtMs) => { if (fieldVisible) drawField(Math.min(0.05, dtMs / 1000)); });
-  if (!coarse) {
-    window.addEventListener('pointermove', (e) => {
-      field.tx = (e.clientX / window.innerWidth - 0.5) * 2;
-      field.ty = (e.clientY / window.innerHeight - 0.5) * 2;
-    }, { passive: true });
-  }
-  window.addEventListener('resize', () => { sizeField(); });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { sizeField(); ScrollTrigger.refresh(); });
-  gsap.timeline({ scrollTrigger: { trigger: '.offers', start: 'top 78%', once: true } })
-    .from('.mark-dot', { scale: 0, duration: 0.6, ease: 'back.out(2)', stagger: 0.15 }, 0)
-    ;   // the shell around it is drawn in webgl, further down
-  const servicesText = fieldHost.querySelector('.wrap');
-  gsap.timeline({
-    scrollTrigger: {
-      trigger: fieldHost, start: 'top bottom', end: 'bottom top', scrub: 0.4,
-      onUpdate: (st) => { field.p = st.progress; }, onRefresh: sizeField
-    }
-  })
-    .fromTo(servicesText, { opacity: 0, scale: 0.94, y: 60 }, { opacity: 1, scale: 1, y: 0, ease: 'none', duration: 0.28 }, 0.02)
-    .to(servicesText, { opacity: 0, scale: 0.62, y: -80, transformOrigin: '50% 30%', ease: 'none', duration: 0.3 }, 0.68);
-
-  // the bounce. brand physics: gravity 2800, restitution 0.78, friction 0.78,
-  // integrated at load and played once. values in em of the wordmark.
-  function simulateBounce(scale) {
-    const o = {
-      holdBefore: 0.25, shortAntDur: 0.12, finalAntDur: 0.36, anticipationSquashY: 0.42,
-      startX: -640 * scale, startY: -200 * scale, launchVx: 490 * scale,
-      gravity: 2800 * scale, restitution: 0.78, friction: 0.78, fps: 120, maxBounces: 4,
-      settleThreshold: 80 * scale, impactSquashFloor: 0.5,
-      stretchPerVel: 0.00055 / scale, impactSquashCoef: 0.00045 / scale, settleDur: 0.3,
-    };
-    const S = [];
-    S.push({ t: 0, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
-    S.push({ t: o.holdBefore - 0.001, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
-    let t = o.holdBefore, dt = 1 / o.fps;
-    let x = o.startX, y = o.startY, vx = o.launchVx, vy = 0, bounces = 0, done = false;
-    while (!done && t < 12) {
-      vy += o.gravity * dt; x += vx * dt; y += vy * dt;
-      if (y >= 0) {
-        y = 0;
-        const imp = Math.abs(vy);
-        const syI = Math.max(o.impactSquashFloor, 1 - imp * o.impactSquashCoef);
-        S.push({ t, x, y: 0, sx: 1 + (1 - syI) * 0.7, sy: syI, op: 1 });
-        vy = -imp * o.restitution; vx *= o.friction; bounces++;
-        if (Math.abs(vy) < o.settleThreshold || bounces >= o.maxBounces) { done = true; continue; }
-        const finalWind = bounces === o.maxBounces - 1;
-        const antDur = finalWind ? o.finalAntDur : o.shortAntDur;
-        const deep = Math.max(o.anticipationSquashY, syI - (finalWind ? 0.12 : 0.05));
-        const n = Math.round(antDur * o.fps);
-        for (let i = 1; i <= n; i++) {
-          const u = i / n;
-          const e = finalWind ? u * u : (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
-          const sy = syI + (deep - syI) * e;
-          S.push({ t: t + antDur * u, x, y: 0, sx: 1 + (1 - sy) * 0.7, sy, op: 1 });
-        }
-        t += antDur;
-        S.push({ t, x, y: 0, sx: 0.85, sy: 1.18, op: 1 });
-        continue;
-      }
-      const sy = 1 + Math.abs(vy) * o.stretchPerVel;
-      S.push({ t, x, y, sx: 2 - sy, sy, op: 1 });
-      t += dt;
-    }
-    const last = S[S.length - 1];
-    const n = Math.round(o.settleDur * o.fps);
-    for (let j = 1; j <= n; j++) {
-      const u = j / n, e = 1 - Math.pow(1 - u, 3);
-      S.push({ t: t + o.settleDur * u, x: last.x * (1 - e), y: 0, sx: last.sx + (1 - last.sx) * e, sy: last.sy + (1 - last.sy) * e, op: 1 });
-    }
-    t += o.settleDur;
-    S.push({ t, x: 0, y: 0, sx: 1, sy: 1, op: 1 });
-    return { samples: S, duration: t };
-  }
-
+  // the hero holds still until the type is in: the period and the lines wait hidden,
+  // so nothing shows and then vanishes before the entrance
   const period = document.getElementById('period');
   const h1 = period.parentElement;
-  const fs = parseFloat(getComputedStyle(h1).fontSize) || 160;
-  const sim = simulateBounce(fs / 160);
-  const boot = gsap.timeline();
+  const heroLines = document.querySelectorAll('.hero [data-lines]');
+  const heroReveal = document.querySelectorAll('.hero [data-reveal]');
+  gsap.set(period, { opacity: 0 });
+  gsap.set([heroLines, heroReveal], { autoAlpha: 0 });
 
-  gsap.set(period, { opacity: 0, x: sim.samples[0].x, y: sim.samples[0].y });
-  boot.to({ p: 0 }, {
-    p: 1, duration: sim.duration, ease: 'none',
-    onUpdate() {
-      const tt = this.progress() * sim.duration;
-      const S = sim.samples;
-      let i = 1;
-      while (i < S.length - 1 && S[i].t < tt) i++;
-      const a = S[i - 1], b = S[i];
-      const u = b.t === a.t ? 1 : Math.min(1, Math.max(0, (tt - a.t) / (b.t - a.t)));
-      const mix = (k) => a[k] + (b[k] - a[k]) * u;
-      gsap.set(period, { x: mix('x'), y: mix('y'), scaleX: mix('sx'), scaleY: mix('sy'), opacity: mix('op') });
-    },
-    onComplete() { gsap.set(period, { clearProps: 'all' }); if (window.__orbTakeover) window.__orbTakeover(); }
-  }, 0);
+  const fontsIn = document.fonts && document.fonts.load
+    ? Promise.race([document.fonts.load('600 1em Inter').then(() => document.fonts.ready), new Promise((r) => setTimeout(r, 800))]).catch(() => {})
+    : Promise.resolve();
+  fontsIn.then(start);
 
-  // type comes in after the dot lands: lines rise in masks
-  const splitTargets = document.querySelectorAll('.hero [data-lines]');
-  const heroSplit = SplitText.create(splitTargets, { type: 'lines', mask: 'lines', linesClass: 'ln' });
-  boot.from(heroSplit.lines, { yPercent: 110, duration: 0.9, ease: 'power3.out', stagger: 0.06 }, Math.max(0.6, sim.duration - 0.8));
-  boot.from(document.querySelectorAll('.hero [data-reveal]'), { opacity: 0, y: 8, duration: 0.6, ease: 'power2.out', stagger: 0.08 }, '<0.3');
+  function start() {
+    const smooth = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
+    const ease = (k, dt) => 1 - Math.pow(1 - k, dt * 60);   // a per-frame factor at 60 fps, the same feel at any refresh rate
+    const TAU = Math.PI * 2;
 
-  // section heads: the rule under the heading draws once
-  document.querySelectorAll('.section-head').forEach((head) => {
-    gsap.from(head, {
-      scrollTrigger: { trigger: head, start: 'top 85%', once: true },
-      opacity: 0, y: 10, duration: 0.7, ease: 'power2.out'
-    });
-  });
+    // smooth scroll
+    let lenis = null;
+    if (window.Lenis) {
+      lenis = new Lenis({ lerp: 0.1, smoothWheel: true, autoRaf: false });
+      window.removeEventListener('scroll', onWindowScroll);
+      lenis.on('scroll', (e) => { onScroll(e.scroll); ScrollTrigger.update(); });
+      gsap.ticker.add((t) => lenis.raf(t * 1000));
+      gsap.ticker.lagSmoothing(0);
+      document.querySelectorAll('a[href^="#"]').forEach(a => {
+        a.addEventListener('click', (ev) => {
+          const id = a.getAttribute('href');
+          const target = id === '#top' ? 0 : document.querySelector(id);
+          if (target === null) return;
+          ev.preventDefault();
+          lenis.scrollTo(target, { offset: -64, duration: 1.1 });
+        });
+      });
+    }
 
-  // method: the dot is the status indicator. it sits on the step you are reading
-  // and hops to whichever step you hover, with the brand's squash and stretch.
-  const steps = gsap.utils.toArray('.step');
-  const stepsEl = document.getElementById('steps');
-  const marker = document.getElementById('marker');
-  const track = stepsEl.querySelector('.track');
-  gsap.set(marker, { xPercent: -50, yPercent: -50, transformOrigin: '50% 100%' });
-  let scrollStep = steps[0], hoverStep = null, hop = null;
-  function stepY(step) {
-    const h = step.querySelector('h3').getBoundingClientRect();
-    return h.top + h.height / 2 - track.getBoundingClientRect().top;
-  }
-  function markerTo(step, animate) {
-    steps.forEach(x => x.classList.toggle('is-active', x === step));
-    if (window.__orbStep) { window.__orbStep(step, animate); return; }
-    const y = stepY(step);
-    if (hop) hop.kill();
-    if (!animate) { gsap.set(marker, { top: y, scaleX: 1, scaleY: 1 }); return; }
-    const dist = Math.abs(y - parseFloat(gsap.getProperty(marker, 'top')));
-    const dur = gsap.utils.clamp(0.35, 0.7, dist / 500);
-    hop = gsap.timeline()
-      .to(marker, { scaleY: 0.72, scaleX: 1.22, duration: 0.1, ease: 'power2.in' }, 0)          // anticipation
-      .to(marker, { top: y, duration: dur, ease: 'power2.inOut' }, 0.1)                           // travel
-      .to(marker, { scaleY: 1.3, scaleX: 0.84, duration: dur * 0.5, ease: 'power2.out' }, 0.1)  // stretch in flight
-      .to(marker, { scaleY: 0.6, scaleX: 1.35, duration: 0.09, ease: 'power2.in' }, 0.1 + dur)  // impact
-      .to(marker, { scaleY: 1, scaleX: 1, duration: 0.5, ease: 'elastic.out(1.1, 0.45)' }, 0.19 + dur);
-  }
-  markerTo(steps[0], false);
-  steps.forEach((step) => {
-    step.addEventListener('pointerenter', () => { hoverStep = step; markerTo(step, true); });
-    ScrollTrigger.create({
-      trigger: step, start: 'top 55%', end: 'bottom 55%',
-      onToggle: (st) => { if (st.isActive) { scrollStep = step; if (!hoverStep) markerTo(step, true); } }
-    });
-  });
-  stepsEl.addEventListener('pointerleave', () => { hoverStep = null; markerTo(scrollStep, true); });
-  ScrollTrigger.addEventListener('refresh', () => markerTo(hoverStep || scrollStep, false));
+    // the field. points drift in three depths behind the services, shift with the
+    // cursor, slide with the scroll, and settle into a grid as you read through.
+    // the canvas is one screen tall (plus a margin) and rides along inside the
+    // section, so only the part in view is ever drawn.
+    const fieldHost = document.getElementById('services');
+    const canvas = document.getElementById('field');
+    const ctx = canvas.getContext('2d');
+    const DEPTHS = [0.35, 0.65, 1];
+    const field = { w: 0, h: 0, ch: 0, pad: 0, top: 0, left: 0, off: -1, dpr: 1, p: 0, mx: 0, my: 0, tx: 0, ty: 0, dots: [], t: 0, k: -1, blank: false };
 
-  // studio: statement lines rise on ink
-  const darkSplit = SplitText.create('[data-lines-dark]', { type: 'lines', mask: 'lines' });
-  gsap.from(darkSplit.lines, {
-    scrollTrigger: { trigger: '.studio', start: 'top 70%', once: true },
-    yPercent: 110, duration: 0.9, ease: 'power3.out', stagger: 0.07
-  });
+    function sizeField() {
+      const r = fieldHost.getBoundingClientRect();
+      field.top = r.top + window.scrollY; field.left = r.left;
+      field.dpr = Math.min(1.5, window.devicePixelRatio || 1);
+      field.w = r.width; field.h = r.height;
+      const ch = canvas.clientHeight || window.innerHeight;
+      field.ch = Math.min(r.height, ch);
+      field.pad = Math.max(0, (ch - window.innerHeight) / 2);   // the margin above the screen, for scrolls the frame loop has not caught up with yet
+      canvas.width = Math.round(field.w * field.dpr);
+      canvas.height = Math.round(field.ch * field.dpr);
+      ctx.setTransform(field.dpr, 0, 0, field.dpr, 0, 0);
+      field.off = -1; field.blank = false;
+      // one point per grid cell; the grid is where they end up
+      const cell = coarse ? 92 : 76;
+      const cols = Math.max(4, Math.floor(r.width / cell));
+      const rows = Math.max(4, Math.floor(r.height / cell));
+      const n = Math.min(220, cols * rows);
+      const ox = (r.width - (cols - 1) * cell) / 2, oy = (r.height - (rows - 1) * cell) / 2;
+      const keep = field.dots;
+      field.dots = [];
+      for (let i = 0; i < n; i++) {
+        const prev = keep[i];
+        const z = DEPTHS[i % 3];
+        field.dots.push({
+          x: prev ? prev.x : Math.random(), y: prev ? prev.y : Math.random(), z,
+          gx: ox + (i % cols) * cell, gy: oy + Math.floor(i / cols) * cell,
+          ph: prev ? prev.ph : Math.random() * Math.PI * 2,
+          sp: prev ? prev.sp : 0.004 + Math.random() * 0.006,
+          amp: prev ? prev.amp : 0.004 + Math.random() * 0.008,
+          vx: prev ? prev.vx : (Math.random() - 0.5) * 0.004, px: 0, py: 0
+        });
+      }
+      // the point's seat: the grid point nearest the upper right, held steady
+      let best = 0, bd = 1e9;
+      field.dots.forEach((d, i) => { const dd = Math.hypot(d.gx - r.width * 0.86, d.gy - r.height * 0.3); if (dd < bd) { bd = dd; best = i; } });
+      field.k = best;
+      const seat = field.dots[best]; seat.x = seat.gx / r.width; seat.y = seat.gy / r.height; seat.vx = 0; seat.amp *= 0.4;
+    }
+    function drawField(dt) {
+      field.t += dt;
+      const e = ease(0.06, dt);
+      field.mx += (field.tx - field.mx) * e;
+      field.my += (field.ty - field.my) * e;
+      const p = field.p;
+      const k = smooth((p - 0.25) / 0.45);          // scatter -> grid through the middle of the section
+      const fade = smooth(p / 0.12) * (1 - smooth((p - 0.9) / 0.1));
+      const dots = field.dots;
+      for (let i = 0; i < dots.length; i++) {        // every position, the seat's included: the point follows it
+        const d = dots[i];
+        d.x += d.vx * dt; if (d.x < -0.02) d.x = 1.02; if (d.x > 1.02) d.x = -0.02;
+        const wob = Math.sin(field.t * d.sp * 60 + d.ph) * d.amp;
+        const fx = (d.x + wob) * field.w + field.mx * d.z * 26;
+        const fy = (d.y + wob * 0.6) * field.h + field.my * d.z * 16 - (p - 0.5) * 140 * d.z;
+        d.px = fx + (d.gx + field.mx * 8 - fx) * k;
+        d.py = fy + (d.gy - fy) * k;
+      }
+      const off = Math.max(0, Math.min(field.h - field.ch, sy - field.top - field.pad));
+      if (off !== field.off) { field.off = off; canvas.style.transform = 'translate3d(0,' + off + 'px,0)'; }
+      const a0 = fade * (1 - k * 0.35);
+      if (a0 * 0.21 <= 0.005) {                       // even the nearest layer is gone
+        if (!field.blank) { ctx.clearRect(0, 0, field.w, field.ch); field.blank = true; }
+        return;
+      }
+      field.blank = false;
+      ctx.clearRect(0, 0, field.w, field.ch);
+      ctx.fillStyle = '#2a2730';
+      // one path per depth: each layer shares its size and its alpha
+      for (let L = 0; L < 3; L++) {
+        const z = DEPTHS[L], a = (0.12 + z * 0.26) * a0;
+        if (a <= 0.005) continue;
+        const r = (0.9 + z * 1.5) * (1 - k * 0.3);
+        ctx.globalAlpha = a;
+        ctx.beginPath();
+        for (let i = L; i < dots.length; i += 3) {
+          if (i === field.k) continue;                 // the point sits here
+          const d = dots[i], y = d.py - off;
+          if (y < -r || y > field.ch + r) continue;
+          ctx.moveTo(d.px + r, y);
+          ctx.arc(d.px, y, r, 0, TAU);
+        }
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    sizeField();
+    let fieldVisible = false;
+    new IntersectionObserver((es) => { fieldVisible = es[0].isIntersecting; }).observe(fieldHost);
+    gsap.ticker.add((t, dtMs) => { if (fieldVisible) drawField(Math.min(0.05, dtMs / 1000)); });
+    if (!coarse) {
+      window.addEventListener('pointermove', (e) => {
+        field.tx = (e.clientX / window.innerWidth - 0.5) * 2;
+        field.ty = (e.clientY / window.innerHeight - 0.5) * 2;
+      }, { passive: true });
+    }
+    const servicesText = fieldHost.querySelector('.wrap');
+    gsap.timeline({
+      scrollTrigger: {
+        trigger: fieldHost, start: 'top bottom', end: 'bottom top', scrub: true,
+        onUpdate: (st) => { field.p = st.progress; }
+      }
+    })
+      .fromTo(servicesText, { opacity: 0, scale: 0.94, y: 60 }, { opacity: 1, scale: 1, y: 0, ease: 'none', duration: 0.28 }, 0.02)
+      .to(servicesText, { opacity: 0, scale: 0.62, y: -80, transformOrigin: '50% 30%', ease: 'none', duration: 0.3 }, 0.68);
 
-  // studio: the line draws across; as it passes each longitude a mark lands there, and the
-  // span over europe is drawn under it, closed at both ends
-  const DRAW = 2.2;
-  const at = (lon) => DRAW * (lon + 30) / 75;
-  const land = (tl, sel, t) => tl
-    .from(sel + ' .geo-dot', { y: -40, opacity: 0, scaleY: 1.3, scaleX: 0.8, duration: 0.55, ease: 'power2.in' }, t)
-    .to(sel + ' .geo-dot', { scaleY: 0.78, scaleX: 1.22, duration: 0.1, ease: 'power2.in' }, '>')
-    .to(sel + ' .geo-dot', { scaleY: 1, scaleX: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.45)' }, '>')
-    .from(sel + ' .geo-stem', { scaleY: 0, duration: 0.5, ease: 'power2.out' }, '<0.05')
-    .from(sel + ' .geo-label', { opacity: 0, y: 8, duration: 0.7, ease: 'power2.out' }, '<0.15');
-  const geoTl = gsap.timeline({ scrollTrigger: { trigger: '#geo', start: 'top 92%', end: 'top 55%', scrub: 0.6 } })
-    .from('#geo-line', { scaleX: 0, duration: DRAW, ease: 'power2.inOut' }, 0)
-    .from('.geo-tick', { scaleY: 0, opacity: 0, duration: 0.5, ease: 'power2.out',
-      stagger: { each: DRAW / 16, ease: 'power2.inOut' } }, 0.05)
-    .from('.geo-deg', { opacity: 0, duration: 0.5, ease: 'power2.out', stagger: { each: DRAW * 3 / 16 } }, 0.3);
-  land(geoTl, '#geo-mark', at(-8.6538) + 0.05);
-  land(geoTl, '#geo-mark-utc', at(0) + 0.05);
-  geoTl
-    .from('#geo-span .geo-span-end.is-l', { scaleY: 0, opacity: 0, duration: 0.3, ease: 'power2.out' }, at(-10) + 0.1)
-    .from('#geo-span .geo-span-line', { scaleX: 0, duration: at(40) - at(-10), ease: 'none' }, at(-10) + 0.1)
-    .from('#geo-span .geo-span-end.is-r', { scaleY: 0, opacity: 0, duration: 0.3, ease: 'power2.out' }, at(40) + 0.1)
-    .from('#geo-span .geo-span-label', { opacity: 0, y: 8, duration: 0.7, ease: 'power2.out' }, at(40) + 0.2);
-
-  // brief form: fields settle in
-  gsap.from('.form .field, .form .form-actions', {
-    scrollTrigger: { trigger: '.form', start: 'top 80%', once: true },
-    opacity: 0, y: 10, duration: 0.6, stagger: 0.06, ease: 'power2.out'
-  });
-
-  // re-split on resize so masks match the new line breaks
-  gsap.to('#geo', { opacity: 0, ease: 'none', scrollTrigger: { trigger: '#geo', start: 'top 28%', end: 'top 6%', scrub: true } });
-
-  /* ------------------------------------------------------------------
-     the point. the period of "floating." is where it starts: the bounce
-     lands and the orb takes the dot's place. from there one orb on a fixed
-     canvas travels the page: a dot in the field, the marker on the method
-     track, the aveiro mark on the line, the period of the last heading.
-     ------------------------------------------------------------------ */
-  if (window.THREE) {
-    const PAPER = 0xe0dfd4;   // paper minus ink: under the difference blend this reads as ink on paper
-    const dpr = Math.min(1.5, window.devicePixelRatio || 1);
-    const orbCanvas = document.getElementById('orb');
-    const orbR = new THREE.WebGLRenderer({ canvas: orbCanvas, alpha: true, antialias: true, powerPreference: 'low-power' });
-    orbR.setPixelRatio(dpr); orbR.setClearColor(0x000000, 0);
-    const orbScene = new THREE.Scene();
-    const orbCam = new THREE.PerspectiveCamera(32, 1, 0.1, 60); orbCam.position.z = 9;
-    const fit = () => { const w = orbCanvas.clientWidth || 1, h = orbCanvas.clientHeight || 1; orbR.setSize(w, h, false); orbCam.aspect = w / h; orbCam.updateProjectionMatrix(); };
-    const orb = new THREE.Group(); orbScene.add(orb);
-    const R = 1.7;
-    const dot = new THREE.Mesh(new THREE.SphereGeometry(R, 64, 48), new THREE.MeshBasicMaterial({ color: PAPER, transparent: true, opacity: 0 })); orb.add(dot);
-    fit();
-    const CW = () => orbCanvas.clientWidth || 1, CH = () => orbCanvas.clientHeight || 1;
-    const vhWorld = () => 2 * orbCam.position.z * Math.tan(orbCam.fov * Math.PI / 360);
-    const pxPerUnit = () => CH() / vhWorld();
-    const scaleForPx = (d) => d / (2 * R * pxPerUnit());   // scale so the sphere spans d pixels
-
-    const o = { x: 0.5, y: 0.5, s: 0.1, gx: 0.5, gy: 0.5, gs: 0.1, section: 'hero', follow: null, k: 0.6, hop: null, took: false };
-    const rectOf = (el) => el.getBoundingClientRect();
-    const last = { x: -1, y: -1, s: -1, o: -1, v: null };
-    const orbVisibleNow = () => dot.visible;
-    const FOLLOW = {
-      period: () => { const r = rectOf(period); return { x: r.left + r.width / 2, y: r.top + r.height / 2, s: scaleForPx(r.width) }; },
-      field:  () => { const r = rectOf(fieldHost), d = field.dots[field.k]; return { x: r.left + d.px, y: r.top + d.py, s: scaleForPx(STATES.services.px) }; },
-      // the marker on the method track, level with the current step's title
-      step:   () => { const tr = rectOf(track), h = rectOf((hoverStep || scrollStep).querySelector('h3')); return { x: tr.left + tr.width / 2, y: h.top + h.height / 2, s: scaleForPx(12) }; },
-      geo:    () => { const r = rectOf(document.querySelector('.geo-dot')); return { x: r.left + r.width / 2, y: r.top + r.height / 2, s: scaleForPx(r.width) }; },
-      bdot:   () => { const r = rectOf(document.getElementById('brief-dot')); return { x: r.left + r.width / 2, y: r.top + r.height / 2, s: scaleForPx(r.width) }; }
-    };
-    const setTarget = (t) => { o.gx = t.x / CW(); o.gy = t.y / CH(); o.gs = t.s; };
-    setTarget(FOLLOW.period()); o.x = o.gx; o.y = o.gy; o.s = o.gs;
-
-    // the bounce lands: the orb is placed exactly on the dot and the two swap in one frame
-    window.__orbTakeover = () => {
-      setTarget(FOLLOW.period()); o.x = o.gx; o.y = o.gy; o.s = o.gs;
-      orb.position.set((o.x - 0.5) * vhWorld() * orbCam.aspect, (0.5 - o.y) * vhWorld(), 0); orb.scale.set(o.s, o.s, o.s);
-      dot.material.opacity = 1; dot.material.transparent = false;
-      orbR.render(orbScene, orbCam);
-      period.style.opacity = '0';
-      o.took = true;
-    };
-
-    // the dom marker steps aside; the orb hops along the track instead, squash and stretch included
-    gsap.set(marker, { opacity: 0 });
-    window.__orbStep = (step, animate) => {
-      if (o.section !== 'method' || !animate) return;
-      const from = { x: o.x, y: o.y }, t = FOLLOW.step();
-      const to = { x: t.x / CW(), y: t.y / CH() };
-      if (Math.abs(to.y - from.y) < 0.002) return;
-      o.hop = { u: 0, from, to };
-      const dur = gsap.utils.clamp(0.35, 0.7, Math.abs(to.y - from.y) * window.innerHeight / 500);
-      gsap.timeline({ onComplete() { o.hop = null; } })
-        .to(orb.scale, { y: () => o.s * 0.72, x: () => o.s * 1.22, duration: 0.1, ease: 'power2.in' }, 0)
-        .to(o.hop, { u: 1, duration: dur, ease: 'power2.inOut' }, 0.1)
-        .to(orb.scale, { y: () => o.s * 1.3, x: () => o.s * 0.84, duration: dur * 0.5, ease: 'power2.out' }, 0.1)
-        .to(orb.scale, { y: () => o.s * 0.6, x: () => o.s * 1.35, duration: 0.09, ease: 'power2.in' }, 0.1 + dur)
-        .to(orb.scale, { y: () => o.s, x: () => o.s, duration: 0.5, ease: 'elastic.out(1.1, 0.45)' }, 0.19 + dur);
-    };
-
-    // the cybersecurity mark: the same icosahedron the point is built from, turning around it.
-    // it shares this canvas, so it costs no second webgl context.
+    // the cybersecurity mark: the same icosahedron the point is built from, turning around it,
+    // on its own small canvas. 12 vertices, 30 edges, drawn in as the section arrives.
     const cyber = document.getElementById('cyber-mark');
-    const cyberWire = new THREE.LineSegments(
-      new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(R, 0)),   // 30 edges: legible at mark size
-      new THREE.LineBasicMaterial({ color: PAPER, transparent: true, opacity: 0 }));
-    cyberWire.userData.total = cyberWire.geometry.attributes.position.count;
-    cyberWire.geometry.setDrawRange(0, 0);
-    orbScene.add(cyberWire);
-    let cyberOn = false;
-    new IntersectionObserver((es) => { cyberOn = es[0].isIntersecting; }).observe(cyber);
-    const cw = { d: 0 };
+    const wire = document.createElement('canvas');
+    wire.className = 'wire'; wire.setAttribute('aria-hidden', 'true');
+    cyber.appendChild(wire);
+    const WS = 84, wdpr = Math.min(2, window.devicePixelRatio || 1);
+    wire.width = wire.height = Math.round(WS * wdpr);
+    const wctx = wire.getContext('2d');
+    const PHI = (1 + Math.sqrt(5)) / 2, VN = Math.hypot(1, PHI);
+    const VERTS = [[-1, PHI, 0], [1, PHI, 0], [-1, -PHI, 0], [1, -PHI, 0], [0, -1, PHI], [0, 1, PHI], [0, -1, -PHI], [0, 1, -PHI], [PHI, 0, -1], [PHI, 0, 1], [-PHI, 0, -1], [-PHI, 0, 1]]
+      .map((v) => v.map((c) => c / VN));
+    const FACES = [0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8, 3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1];
+    const EDGES = [], seen = new Set();
+    for (let f = 0; f < FACES.length; f += 3) {
+      for (let j = 0; j < 3; j++) {
+        const a = FACES[f + j], b = FACES[f + (j + 1) % 3], key = Math.min(a, b) + '-' + Math.max(a, b);
+        if (!seen.has(key)) { seen.add(key); EDGES.push([a, b]); }
+      }
+    }
+    const proj = VERTS.map(() => [0, 0]);
+    const wst = { op: 0, d: 0 };
+    let wireOn = false;
+    new IntersectionObserver((es) => { wireOn = es[0].isIntersecting; }).observe(cyber);
+    function drawWire(t) {
+      wctx.setTransform(wdpr, 0, 0, wdpr, 0, 0);
+      wctx.clearRect(0, 0, WS, WS);
+      if (wst.op < 0.01 || wst.d <= 0) return;
+      // about four minutes a turn, tipped forward; a long lens, so barely any perspective
+      const ry = t * 0.026, cy = Math.cos(ry), syn = Math.sin(ry), cx = Math.cos(0.42), sx = Math.sin(0.42);
+      const R = WS / 2, D = 1600;
+      for (let i = 0; i < VERTS.length; i++) {
+        const [x, y, z] = VERTS[i];
+        const x1 = x * cy + z * syn, z1 = -x * syn + z * cy;
+        const y2 = y * cx - z1 * sx, z2 = y * sx + z1 * cx;
+        const f = D / (D - z2 * R);
+        proj[i][0] = R + x1 * R * f; proj[i][1] = R - y2 * R * f;
+      }
+      const total = EDGES.length * wst.d, full = Math.floor(total), frac = total - full;
+      wctx.globalAlpha = wst.op;
+      wctx.strokeStyle = '#15141a';
+      wctx.lineWidth = 0.8;
+      wctx.beginPath();
+      for (let i = 0; i < Math.min(full + 1, EDGES.length); i++) {
+        const a = proj[EDGES[i][0]], b = proj[EDGES[i][1]], u = i < full ? 1 : frac;
+        wctx.moveTo(a[0], a[1]);
+        wctx.lineTo(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u);
+      }
+      wctx.stroke();
+    }
     gsap.timeline({ scrollTrigger: { trigger: '.offers', start: 'top 78%', once: true } })
-      .to(cyberWire.material, { opacity: 0.9, duration: 0.9, ease: 'power2.out' }, 0.6)
-      .to(cw, { d: 1, duration: 4.5, ease: 'power1.inOut',
-        onUpdate() { cyberWire.geometry.setDrawRange(0, Math.floor(cyberWire.userData.total * cw.d)); } }, 0.5);
+      .from('.mark-dot', { scale: 0, duration: 0.6, ease: 'back.out(2)', stagger: 0.15 }, 0)
+      .to(wst, { op: 0.9, duration: 0.9, ease: 'power2.out' }, 0.6)
+      .to(wst, { d: 1, duration: 4.5, ease: 'power1.inOut' }, 0.5);
+
+    // section heads: the rule under the heading draws once
+    document.querySelectorAll('.section-head').forEach((head) => {
+      gsap.from(head, {
+        scrollTrigger: { trigger: head, start: 'top 85%', once: true },
+        opacity: 0, y: 10, duration: 0.7, ease: 'power2.out'
+      });
+    });
+
+    /* ------------------------------------------------------------------
+       the point. the period of "floating." is where it starts: the entrance
+       lands and the orb takes the dot's place. from there one orb travels the
+       page: a dot in the field, the marker on the method track, the aveiro
+       mark on the line, the period of the last heading.
+       positions are kept in page coordinates, measured on refresh, so the frame
+       loop never reads the layout and the orb stays locked to its anchor while
+       the page scrolls.
+       ------------------------------------------------------------------ */
+    const orbEl = document.getElementById('orb');
+    const BASE = 64;                                     // the orb's css size; it only ever scales down from here, so it stays crisp
+    const steps = gsap.utils.toArray('.step');
+    const stepsEl = document.getElementById('steps');
+    const marker = document.getElementById('marker');
+    const track = stepsEl.querySelector('.track');
+    const geoMark = document.getElementById('geo-mark');
+    const geoDot = geoMark.querySelector('.geo-dot');
+    const briefDot = document.getElementById('brief-dot');
+    const sectionEls = Array.from(document.querySelectorAll('[data-orb]'));
+    const stopEls = ['#services', '#method', '#studio', '#brief'].map((q) => document.querySelector(q));
+    let scrollStep = steps[0], hoverStep = null;
+
+    const C = { vh: window.innerHeight, tops: [], stops: [], period: null, track: 0, steps: new Map(), geo: null, bdot: null };
+    const docBox = (el) => { const r = el.getBoundingClientRect(), y0 = window.scrollY; return { x: r.left + r.width / 2, y: r.top + r.height / 2 + y0, s: r.width, top: r.top + y0 }; };
+    function measure() {
+      C.vh = window.innerHeight;
+      C.tops = sectionEls.map((el) => docBox(el).top);
+      C.stops = [0, ...stopEls.map((el) => docBox(el).top - 64)];
+      C.period = docBox(period);
+      C.track = docBox(track).x;
+      steps.forEach((s) => C.steps.set(s, docBox(s.querySelector('h3')).y));
+      C.geo = docBox(geoMark);
+      C.bdot = docBox(briefDot);
+    }
+    measure();
 
     const STATES = {
       hero:     { follow: 'period', k: 0.6 },
-      services: { follow: 'field',  k: 0.12, px: 5, alpha: 0.4 },
+      services: { follow: 'field',  k: 0.12, alpha: 0.4 },
       method:   { follow: 'step',   k: 0.3 },
       studio:   { follow: 'geo',    k: 0.2 },
       brief:    { follow: 'bdot',   k: 0.2 },
       footer:   { follow: 'bdot',   k: 0.3 }
     };
+    const FOLLOW = {
+      period: () => C.period,
+      // in the field the point is one of the dots: as small and as faint as its neighbours
+      field:  () => { const d = field.dots[field.k]; return { x: field.left + d.px, y: field.top + d.py, s: 5 }; },
+      // the marker on the method track, level with the current step's title
+      step:   () => ({ x: C.track, y: C.steps.get(hoverStep || scrollStep), s: 12 }),
+      // the aveiro mark, including its landing on the line: its tween values are read from gsap, not the layout
+      geo:    () => {
+        const y = gsap.getProperty(geoDot, 'y'), gsx = gsap.getProperty(geoDot, 'scaleX'), gsy = gsap.getProperty(geoDot, 'scaleY');
+        return { x: C.geo.x, y: C.geo.y - 16 + y - 6 * gsy, s: 12 * gsx };
+      },
+      bdot:   () => C.bdot
+    };
+    const o = { x: 0, y: 0, s: 1, section: 'hero', follow: 'period', k: 0.6, hop: null, took: false };
+    const sq = { x: 1, y: 1 };                           // squash and stretch, on top of the size
+    let hopTl = null, lastTf = '';
+    const alphaOf = (name) => { const a = (STATES[name] || STATES.hero).alpha; return a === undefined ? 1 : a; };
+
+    function renderOrb() {
+      const s = o.s / BASE;
+      const tf = 'translate3d(' + (o.x - BASE / 2).toFixed(2) + 'px,' + (o.y - sy - BASE / 2).toFixed(2) + 'px,0) scale(' + (s * sq.x).toFixed(4) + ',' + (s * sq.y).toFixed(4) + ')';
+      if (tf !== lastTf) { orbEl.style.transform = tf; lastTf = tf; }
+    }
     function applyState(name) {
       const st = STATES[name] || STATES.hero;
-      o.section = name; o.follow = st.follow; o.k = st.k; o.hop = null;
-      // in the field the point is one of the dots: as faint as its neighbours
-      if (o.took) gsap.to(dot.material, { opacity: st.alpha === undefined ? 1 : st.alpha, duration: 1.0, ease: 'power2.inOut' });
+      o.section = name; o.follow = st.follow; o.k = st.k;
+      if (o.hop) { hopTl.kill(); o.hop = null; gsap.to(sq, { x: 1, y: 1, duration: 0.3, ease: 'power2.out' }); }
+      if (o.took) gsap.to(orbEl, { opacity: alphaOf(name), duration: 1.0, ease: 'power2.inOut', overwrite: 'auto' });
     }
-    // the current section is the last one whose top has passed the 55% line; at the top that is the hero
-    const sectionEls = Array.from(document.querySelectorAll('[data-orb]'));
-    function currentSection() {
-      const line = window.innerHeight * 0.55;
-      let cur = 'hero';
-      sectionEls.forEach((el) => { if (el.getBoundingClientRect().top <= line) cur = el.dataset.orb; });
-      return cur;
+    // the entrance lands: the orb is placed exactly on the dot and the two swap in one frame
+    function takeover() {
+      C.period = docBox(period);
+      o.x = C.period.x; o.y = C.period.y; o.s = C.period.s;
+      renderOrb();
+      gsap.set(orbEl, { opacity: alphaOf(o.section) });
+      period.style.opacity = '0';
+      o.took = true;
     }
 
-    gsap.ticker.add((t) => {
-      const cur = currentSection(); if (cur !== o.section) applyState(cur);
-      if (o.follow && !o.hop) setTarget(FOLLOW[o.follow]());
+    gsap.ticker.add((t, dtMs) => {
+      const dt = Math.min(0.05, dtMs / 1000);
+      // the current section is the last one whose top has passed the 55% line; at the top that is the hero
+      const line = sy + C.vh * 0.55;
+      let cur = 'hero';
+      for (let i = 0; i < C.tops.length; i++) if (C.tops[i] <= line) cur = sectionEls[i].dataset.orb;
+      if (cur !== o.section) applyState(cur);
+      if (wireOn) drawWire(t);
+      if (!o.took) return;
+      const g = FOLLOW[o.follow](), e = ease(o.k, dt);
       if (o.hop) {
         const u = o.hop.u;
-        o.x = o.hop.from.x + (o.hop.to.x - o.hop.from.x) * u;
-        o.y = o.hop.from.y + (o.hop.to.y - o.hop.from.y) * u;
+        o.x = o.hop.fx + (g.x - o.hop.fx) * u;
+        o.y = o.hop.fy + (g.y - o.hop.fy) * u;
       } else {
-        o.x += (o.gx - o.x) * o.k; o.y += (o.gy - o.y) * o.k; o.s += (o.gs - o.s) * o.k;
+        o.x += (g.x - o.x) * e; o.y += (g.y - o.y) * e;
       }
-      const vh = vhWorld(), vw = vh * orbCam.aspect;
-      // the shell turns slowly over the cybersecurity mark: about a revolution a minute
-      cyberWire.visible = cyberOn && cyberWire.material.opacity > 0.01;
-      if (cyberWire.visible) {
-        const r = cyber.getBoundingClientRect(), cs = scaleForPx(84);
-        cyberWire.position.set(((r.left + r.width / 2) / CW() - 0.5) * vw, (0.5 - (r.top + r.height / 2) / CH()) * vh, 0);
-        cyberWire.scale.set(cs, cs, cs);
-        cyberWire.rotation.y = t * 0.026; cyberWire.rotation.x = 0.42;   // about four minutes a turn, and frame-rate independent
-      }
-      orb.position.set((o.x - 0.5) * vw, (0.5 - o.y) * vh, 0);
-      if (!gsap.isTweening(orb.scale)) orb.scale.set(o.s, o.s, o.s); else orb.scale.z = o.s;
-      dot.visible = o.took && dot.material.opacity > 0.01;
-      dot.material.transparent = dot.material.opacity < 0.999;
-      // draw only when something moved
-      const moved = Math.abs(o.x - last.x) > 1e-5 || Math.abs(o.y - last.y) > 1e-5 || Math.abs(o.s - last.s) > 1e-5 || Math.abs(dot.material.opacity - last.o) > 1e-3 || cyberWire.visible || gsap.isTweening(orb.scale) || last.v !== orbVisibleNow();
-      if (moved) { orbR.render(orbScene, orbCam); last.x = o.x; last.y = o.y; last.s = o.s; last.o = dot.material.opacity; last.v = orbVisibleNow(); }
+      o.s += (g.s - o.s) * e;
+      renderOrb();
     });
-    window.addEventListener('resize', fit);
 
-    // when scrolling stops near a section top, the page settles onto it
+    // method: the orb is the status indicator. it sits on the step you are reading
+    // and hops to whichever step you hover, with the brand's squash and stretch.
+    gsap.set(marker, { opacity: 0 });                    // the dom marker steps aside for the orb
+    function markerTo(step, animate) {
+      steps.forEach(x => x.classList.toggle('is-active', x === step));
+      if (!o.took || o.section !== 'method' || !animate) return;
+      const to = C.steps.get(step);
+      if (Math.abs(to - o.y) < 2) return;
+      if (hopTl) hopTl.kill();
+      o.hop = { u: 0, fx: o.x, fy: o.y };
+      const dur = gsap.utils.clamp(0.35, 0.7, Math.abs(to - o.y) / 500);
+      hopTl = gsap.timeline({ onComplete() { o.hop = null; } })
+        .to(sq, { y: 0.72, x: 1.22, duration: 0.1, ease: 'power2.in' }, 0)          // anticipation
+        .to(o.hop, { u: 1, duration: dur, ease: 'power2.inOut' }, 0.1)                // travel
+        .to(sq, { y: 1.3, x: 0.84, duration: dur * 0.5, ease: 'power2.out' }, 0.1)   // stretch in flight
+        .to(sq, { y: 0.6, x: 1.35, duration: 0.09, ease: 'power2.in' }, 0.1 + dur)   // impact
+        .to(sq, { y: 1, x: 1, duration: 0.5, ease: 'elastic.out(1.1, 0.45)' }, 0.19 + dur);
+    }
+    markerTo(steps[0], false);
+    steps.forEach((step) => {
+      step.addEventListener('pointerenter', () => { hoverStep = step; markerTo(step, true); });
+      ScrollTrigger.create({
+        trigger: step, start: 'top 55%', end: 'bottom 55%',
+        onToggle: (st) => { if (st.isActive) { scrollStep = step; if (!hoverStep) markerTo(step, true); } }
+      });
+    });
+    stepsEl.addEventListener('pointerleave', () => { hoverStep = null; markerTo(scrollStep, true); });
+
+    // studio: statement lines rise on ink
+    const darkSplit = SplitText.create('[data-lines-dark]', { type: 'lines', mask: 'lines' });
+    gsap.from(darkSplit.lines, {
+      scrollTrigger: { trigger: '.studio', start: 'top 70%', once: true },
+      yPercent: 110, duration: 0.9, ease: 'power3.out', stagger: 0.07
+    });
+
+    // studio: the line draws across; as it passes each longitude a mark lands there, and the
+    // span over europe is drawn under it, closed at both ends
+    const DRAW = 2.2;
+    const at = (lon) => DRAW * (lon + 30) / 75;
+    const land = (tl, sel, t) => tl
+      .from(sel + ' .geo-dot', { y: -40, opacity: 0, scaleY: 1.3, scaleX: 0.8, duration: 0.55, ease: 'power2.in' }, t)
+      .to(sel + ' .geo-dot', { scaleY: 0.78, scaleX: 1.22, duration: 0.1, ease: 'power2.in' }, '>')
+      .to(sel + ' .geo-dot', { scaleY: 1, scaleX: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.45)' }, '>')
+      .from(sel + ' .geo-stem', { scaleY: 0, duration: 0.5, ease: 'power2.out' }, '<0.05')
+      .from(sel + ' .geo-label', { opacity: 0, y: 8, duration: 0.7, ease: 'power2.out' }, '<0.15');
+    const geoTl = gsap.timeline({ scrollTrigger: { trigger: '#geo', start: 'top 92%', end: 'top 55%', scrub: 0.6 } })
+      .from('#geo-line', { scaleX: 0, duration: DRAW, ease: 'power2.inOut' }, 0)
+      .from('.geo-tick', { scaleY: 0, opacity: 0, duration: 0.5, ease: 'power2.out',
+        stagger: { each: DRAW / 16, ease: 'power2.inOut' } }, 0.05)
+      .from('.geo-deg', { opacity: 0, duration: 0.5, ease: 'power2.out', stagger: { each: DRAW * 3 / 16 } }, 0.3);
+    land(geoTl, '#geo-mark', at(-8.6538) + 0.05);
+    land(geoTl, '#geo-mark-utc', at(0) + 0.05);
+    geoTl
+      .from('#geo-span .geo-span-end.is-l', { scaleY: 0, opacity: 0, duration: 0.3, ease: 'power2.out' }, at(-10) + 0.1)
+      .from('#geo-span .geo-span-line', { scaleX: 0, duration: at(40) - at(-10), ease: 'none' }, at(-10) + 0.1)
+      .from('#geo-span .geo-span-end.is-r', { scaleY: 0, opacity: 0, duration: 0.3, ease: 'power2.out' }, at(40) + 0.1)
+      .from('#geo-span .geo-span-label', { opacity: 0, y: 8, duration: 0.7, ease: 'power2.out' }, at(40) + 0.2);
+    gsap.to('#geo', { opacity: 0, ease: 'none', scrollTrigger: { trigger: '#geo', start: 'top 28%', end: 'top 6%', scrub: true } });
+
+    // brief form: fields settle in
+    gsap.from('.form .field, .form .form-actions', {
+      scrollTrigger: { trigger: '.form', start: 'top 80%', once: true },
+      opacity: 0, y: 10, duration: 0.6, stagger: 0.06, ease: 'power2.out'
+    });
+
+    /* ------------------------------------------------------------------
+       the entrance. the period arrives a different way on each visit: the
+       brand bounce, under a parachute, on a cloud, tied to a balloon, decrypted,
+       or rolling in. every one ends the same way: the dot meets the baseline,
+       squashes, settles, and the orb takes its place. props are ink hairlines
+       on paper, sized in em of the wordmark. ?intro=<name> picks one.
+       ------------------------------------------------------------------ */
+    const fs = parseFloat(getComputedStyle(h1).fontSize) || 160;
+    const E = fs;                                        // one em of the wordmark, in px
+    const SVGNS = 'http://www.w3.org/2000/svg';
+    const f2 = (v) => Math.round(v * 100) / 100;
+    const svgEl = (tag, attrs, parent) => {
+      const n = document.createElementNS(SVGNS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      if (parent) parent.appendChild(n);
+      return n;
+    };
+    const place = (n, x, y, sx, sy) => { n.style.transform = 'translate3d(' + f2(x) + 'px,' + f2(y) + 'px,0) scale(' + f2(sx) + ',' + f2(sy) + ')'; };
+
+    // a stand-in for the period, laid exactly over it, with an svg whose origin is the dot's centre at rest
+    function makeRig() {
+      const rig = document.createElement('span');
+      rig.className = 'intro-rig';
+      rig.setAttribute('aria-hidden', 'true');
+      rig.style.left = period.offsetLeft + 'px';
+      rig.style.top = period.offsetTop + 'px';
+      rig.style.width = period.offsetWidth + 'px';
+      rig.style.height = period.offsetHeight + 'px';
+      rig.style.setProperty('--hair', f2(Math.max(1, Math.min(2.4, E / 100))) + 'px');
+      const svg = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, rig);
+      const dot = document.createElement('span');
+      dot.className = 'intro-dot';
+      rig.appendChild(dot);
+      h1.appendChild(rig);
+      const pr = period.getBoundingClientRect();
+      return { rig, svg, dot, rr: period.offsetWidth / 2, vx: pr.left + pr.width / 2 };
+    }
+    // the brand's landing, as on the method track: squash on contact, then the elastic settle
+    const touchdown = (tl, st, t, depth) => tl
+      .to(st, { sy: 1 - 0.4 * depth, sx: 1 + 0.35 * depth, duration: 0.09, ease: 'power2.in' }, t)
+      .to(st, { sy: 1, sx: 1, duration: 0.55, ease: 'elastic.out(1.1, 0.45)' }, t + 0.09);
+
+    // the bounce. brand physics: gravity 2800, restitution 0.78, friction 0.78,
+    // integrated at load and played once. values in em of the wordmark.
+    function simulateBounce(scale) {
+      const o = {
+        holdBefore: 0.25, shortAntDur: 0.12, finalAntDur: 0.36, anticipationSquashY: 0.42,
+        startX: -640 * scale, startY: -200 * scale, launchVx: 490 * scale,
+        gravity: 2800 * scale, restitution: 0.78, friction: 0.78, fps: 120, maxBounces: 4,
+        settleThreshold: 80 * scale, impactSquashFloor: 0.5,
+        stretchPerVel: 0.00055 / scale, impactSquashCoef: 0.00045 / scale, settleDur: 0.3,
+      };
+      const S = [];
+      S.push({ t: 0, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
+      S.push({ t: o.holdBefore - 0.001, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
+      let t = o.holdBefore, dt = 1 / o.fps;
+      let x = o.startX, y = o.startY, vx = o.launchVx, vy = 0, bounces = 0, done = false;
+      while (!done && t < 12) {
+        vy += o.gravity * dt; x += vx * dt; y += vy * dt;
+        if (y >= 0) {
+          y = 0;
+          const imp = Math.abs(vy);
+          const syI = Math.max(o.impactSquashFloor, 1 - imp * o.impactSquashCoef);
+          S.push({ t, x, y: 0, sx: 1 + (1 - syI) * 0.7, sy: syI, op: 1 });
+          vy = -imp * o.restitution; vx *= o.friction; bounces++;
+          if (Math.abs(vy) < o.settleThreshold || bounces >= o.maxBounces) { done = true; continue; }
+          const finalWind = bounces === o.maxBounces - 1;
+          const antDur = finalWind ? o.finalAntDur : o.shortAntDur;
+          const deep = Math.max(o.anticipationSquashY, syI - (finalWind ? 0.12 : 0.05));
+          const n = Math.round(antDur * o.fps);
+          for (let i = 1; i <= n; i++) {
+            const u = i / n;
+            const e = finalWind ? u * u : (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+            const sy = syI + (deep - syI) * e;
+            S.push({ t: t + antDur * u, x, y: 0, sx: 1 + (1 - sy) * 0.7, sy, op: 1 });
+          }
+          t += antDur;
+          S.push({ t, x, y: 0, sx: 0.85, sy: 1.18, op: 1 });
+          continue;
+        }
+        const sy = 1 + Math.abs(vy) * o.stretchPerVel;
+        S.push({ t, x, y, sx: 2 - sy, sy, op: 1 });
+        t += dt;
+      }
+      const last = S[S.length - 1];
+      const n = Math.round(o.settleDur * o.fps);
+      for (let j = 1; j <= n; j++) {
+        const u = j / n, e = 1 - Math.pow(1 - u, 3);
+        S.push({ t: t + o.settleDur * u, x: last.x * (1 - e), y: 0, sx: last.sx + (1 - last.sx) * e, sy: last.sy + (1 - last.sy) * e, op: 1 });
+      }
+      t += o.settleDur;
+      S.push({ t, x: 0, y: 0, sx: 1, sy: 1, op: 1 });
+      return { samples: S, duration: t };
+    }
+
+    const INTROS = {
+      bounce() {
+        const sim = simulateBounce(fs / 160), S = sim.samples, st = { t: 0 };
+        let i = 1;
+        const tl = gsap.timeline().to(st, {
+          t: sim.duration, duration: sim.duration, ease: 'none',
+          onUpdate() {
+            const tt = st.t;
+            if (S[i - 1].t > tt) i = 1;                  // played back: start the search over
+            while (i < S.length - 1 && S[i].t < tt) i++;
+            const a = S[i - 1], b = S[i];
+            const u = b.t === a.t ? 1 : Math.min(1, Math.max(0, (tt - a.t) / (b.t - a.t)));
+            const mix = (k) => a[k] + (b[k] - a[k]) * u;
+            place(period, mix('x'), mix('y'), mix('sx'), mix('sy'));
+            period.style.opacity = mix('op');
+          }
+        });
+        return { tl, land: sim.duration, rest: sim.duration };
+      },
+
+      // drifts down under a canopy, swinging gently; on landing the lines go slack and the canopy folds away
+      parachute(r) {
+        const D = 2.1, H = 0.66 * E, W = 0.6 * E, dome = 0.2 * E;
+        const lines = svgEl('g', { class: 'soft' }, r.svg);
+        const canopy = svgEl('g', {}, r.svg);
+        const hem = [0, 1, 2, 3, 4].map((i) => -W / 2 + W * i / 4);
+        let d = 'M' + f2(-W / 2) + ' ' + f2(-H) + 'C' + f2(-W / 2) + ' ' + f2(-H - dome * 1.3) + ' ' + f2(W / 2) + ' ' + f2(-H - dome * 1.3) + ' ' + f2(W / 2) + ' ' + f2(-H);
+        for (let i = 4; i > 0; i--) d += 'Q' + f2((hem[i] + hem[i - 1]) / 2) + ' ' + f2(-H - 0.065 * E) + ' ' + f2(hem[i - 1]) + ' ' + f2(-H);
+        svgEl('path', { class: 'solid', d: d + 'Z' }, canopy);
+        const apex = -H - dome * 0.975;
+        [1, 2, 3].forEach((i) => svgEl('path', { class: 'hair', d: 'M' + f2(hem[i]) + ' ' + f2(-H - 0.05 * E) + 'Q' + f2(hem[i] * 0.8) + ' ' + f2(apex + dome * 0.25) + ' 0 ' + f2(apex) }, canopy));
+        [0, 1, 3, 4].forEach((i) => svgEl('path', { class: 'hair', d: 'M' + f2(hem[i]) + ' ' + f2(-H) + 'L0 ' + f2(-r.rr) }, lines));
+        const st = { op: 0, x: -0.3 * E, y: -1.9 * E, ph: 0, sx: 1, sy: 1, cx: 0, cy: 0, cth: 0, csy: 1, cop: 1, lop: 1 };
+        const render = () => {
+          const th = 8 * Math.sin(st.ph * D * TAU / 1.5) * Math.pow(1 - st.ph, 1.2), rad = th * Math.PI / 180;
+          r.rig.style.opacity = st.op;
+          place(r.dot, st.x - H * Math.sin(rad), st.y + H * (Math.cos(rad) - 1), st.sx, st.sy);
+          const frame = 'translate(' + f2(st.x + st.cx) + ' ' + f2(st.y + st.cy) + ') rotate(' + f2(th + st.cth) + ' 0 ' + f2(-H) + ')';
+          lines.setAttribute('transform', frame);
+          lines.setAttribute('opacity', st.lop);
+          canopy.setAttribute('transform', frame + ' translate(0 ' + f2(-H) + ') scale(1 ' + f2(st.csy) + ') translate(0 ' + f2(H) + ')');
+          canopy.setAttribute('opacity', st.cop);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.35, ease: 'power1.out' }, 0)
+          .to(st, { x: 0, y: 0, duration: D, ease: 'sine.out' }, 0)
+          .to(st, { ph: 1, duration: D, ease: 'none' }, 0);
+        touchdown(tl, st, D, 0.4);
+        tl.to(st, { lop: 0, duration: 0.25, ease: 'power1.out' }, D)
+          .to(st, { cx: 0.32 * E, cy: 0.12 * E, cth: 14, duration: 0.95, ease: 'power2.out' }, D)
+          .to(st, { csy: 0.08, duration: 0.7, ease: 'power2.in' }, D + 0.1)
+          .to(st, { cop: 0, duration: 0.4, ease: 'power1.in' }, D + 0.5);
+        render();
+        return { tl, land: D, rest: D + 0.64 };
+      },
+
+      // flies in on a little cloud above the word, hops off onto the baseline, and the cloud carries on
+      nimbus(r) {
+        const cloud = svgEl('g', {}, r.svg);
+        const trail = svgEl('g', { class: 'soft' }, r.svg);
+        const body = [[-0.22, 0, 0.1], [-0.05, -0.08, 0.14], [0.13, -0.05, 0.12], [0.27, 0.015, 0.085]];
+        // outline trick: the shapes stroked at double weight, then filled over, leaves only the outer edge
+        const outline = svgEl('g', { class: 'hair double' }, cloud), fill = svgEl('g', { class: 'cloud-fill' }, cloud);
+        svgEl('path', { d: 'M' + f2(-0.3 * E) + ' ' + f2(0.06 * E) + 'C' + f2(-0.42 * E) + ' ' + f2(0.09 * E) + ' ' + f2(-0.52 * E) + ' ' + f2(0.02 * E) + ' ' + f2(-0.47 * E) + ' ' + f2(-0.05 * E) + 'C' + f2(-0.44 * E) + ' ' + f2(-0.1 * E) + ' ' + f2(-0.37 * E) + ' ' + f2(-0.08 * E) + ' ' + f2(-0.38 * E) + ' ' + f2(-0.03 * E) }, outline);
+        [outline, fill].forEach((g) => {
+          body.forEach(([cx, cy, cr]) => svgEl('circle', { cx: f2(cx * E), cy: f2(cy * E), r: f2(cr * E) }, g));
+          svgEl('rect', { x: f2(-0.22 * E), y: 0, width: f2(0.49 * E), height: f2(0.1 * E) }, g);
+        });
+        [[-0.06, 0.34], [0.02, 0.5], [0.08, 0.26]].forEach(([y, len]) =>
+          svgEl('path', { class: 'hair', d: 'M' + f2(-0.56 * E) + ' ' + f2(y * E) + 'L' + f2((-0.56 - len) * E) + ' ' + f2(y * E) }, trail));
+        const CY = -0.85 * E, CX = 0.12 * E;                // above the ascenders of the word, then just past the period
+        const SEAT = { x: -0.05 * E, y: -0.21 * E - r.rr };
+        const x0 = -(r.vx + 0.9 * E), xOut = window.innerWidth - r.vx + 0.9 * E;
+        const st = { cx: x0, cy: CY, bob: 0, dip: 0, spd: 1, hop: 0, sx: 1, sy: 1 };
+        // the hop is a real arc: a short rise off the cloud, then gravity down to the baseline
+        const T = 0.5, rise = 0.1 * E;
+        let hx = 0, hy = 0, g = 0, v0 = 0;
+        const launch = () => {
+          hx = CX + SEAT.x; hy = CY + SEAT.y;
+          const s = (Math.sqrt(2 * rise) + Math.sqrt(2 * rise - 2 * hy)) / T;
+          g = s * s; v0 = Math.sqrt(2 * g * rise);
+        };
+        const render = () => {
+          const cy = st.cy - 0.025 * E * st.bob + 0.035 * E * st.dip;
+          cloud.setAttribute('transform', 'translate(' + f2(st.cx) + ' ' + f2(cy) + ')');
+          trail.setAttribute('transform', 'translate(' + f2(st.cx) + ' ' + f2(cy) + ') translate(' + f2(-0.56 * E) + ' 0) scale(' + f2(Math.max(0.001, st.spd)) + ' 1) translate(' + f2(0.56 * E) + ' 0)');
+          trail.setAttribute('opacity', f2(Math.min(1, st.spd * 2.5)));
+          if (st.hop > 0) {
+            const t = st.hop * T;
+            place(r.dot, hx * (1 - st.hop), hy - v0 * t + 0.5 * g * t * t, st.sx, st.sy);
+          } else {
+            place(r.dot, st.cx + SEAT.x, cy + SEAT.y, st.sx, st.sy);
+          }
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { cx: CX, duration: 1.05, ease: 'power4.out' }, 0)
+          .to(st, { spd: 0, duration: 0.95, ease: 'power2.out' }, 0)
+          .to(st, { bob: 1, duration: 0.3, ease: 'sine.inOut', yoyo: true, repeat: 1 }, 0.75)
+          .to(st, { sy: 0.8, sx: 1.15, duration: 0.1, ease: 'power2.in' }, 1.35)      // crouch
+          .call(launch, null, 1.45)
+          .to(st, { hop: 1, duration: T, ease: 'none' }, 1.45)
+          .to(st, { sy: 1.16, sx: 0.88, duration: 0.18, ease: 'power2.out' }, 1.45)  // stretch off the cloud
+          .to(st, { sy: 1.08, sx: 0.94, duration: 0.3, ease: 'sine.inOut' }, 1.63)
+          .to(st, { dip: 1, duration: 0.12, ease: 'power2.out' }, 1.45)              // the cloud gives under the push
+          .to(st, { dip: 0, duration: 0.35, ease: 'sine.out' }, 1.57)
+          .to(st, { cx: xOut, cy: CY - 0.55 * E, duration: 0.65, ease: 'power3.in' }, 1.62)
+          .to(st, { spd: 1.2, duration: 0.5, ease: 'power2.in' }, 1.7);
+        touchdown(tl, st, 1.45 + T, 1);
+        render();
+        return { tl, land: 1.45 + T, rest: 1.45 + T + 0.64 };
+      },
+
+      // floats down tied to a balloon; on the baseline the string lets go and the balloon rises away
+      balloon(r) {
+        const D = 2.3, S = 0.5 * E, RX = 0.16 * E, RY = 0.2 * E, KN = 0.035 * E;
+        const string = svgEl('path', { class: 'hair soft' }, r.svg);
+        const ball = svgEl('g', {}, r.svg);
+        svgEl('path', { class: 'solid', d: 'M' + f2(-0.028 * E) + ' 0L' + f2(0.028 * E) + ' 0L0 ' + f2(-KN - 0.01 * E) + 'Z' }, ball);
+        svgEl('ellipse', { class: 'solid', cx: 0, cy: f2(-KN - RY), rx: f2(RX), ry: f2(RY) }, ball);
+        const hl = (a) => f2(0.66 * RX * Math.cos(a)) + ' ' + f2(-KN - RY + 0.66 * RY * Math.sin(a));
+        svgEl('path', { class: 'hair soft', d: 'M' + hl(3.55) + 'A' + f2(0.66 * RX) + ' ' + f2(0.66 * RY) + ' 0 0 1 ' + hl(4.25) }, ball);
+        const st = { op: 0, x: 0.32 * E, y: -1.45 * E, wv: 0, sx: 1, sy: 1, rel: 0, bx: 0, by: 0, bop: 1 };
+        const render = () => {
+          r.rig.style.opacity = st.op;
+          place(r.dot, st.x, st.y, st.sx, st.sy);
+          const tilt = 6 * Math.sin(st.wv * 0.45), rad = tilt * Math.PI / 180;
+          const ax = st.x, ay = st.y - r.rr;                       // where the string meets the dot
+          const kx = ax + S * Math.sin(rad) + st.bx, ky = ay - S * Math.cos(rad) + st.by;
+          const hx = kx + 0.04 * E * Math.sin(st.wv * 0.8), hy = ky + S * 0.92;    // where its loose end hangs once let go
+          const bx = ax + (hx - ax) * st.rel, by = ay + (hy - ay) * st.rel;
+          const dx = kx - bx, dy = ky - by, len = Math.hypot(dx, dy) || 1, w = 0.035 * E * Math.sin(st.wv);
+          const nx = -dy / len * w, ny = dx / len * w;
+          string.setAttribute('d', 'M' + f2(bx) + ' ' + f2(by) + 'C' + f2(bx + dx * 0.33 + nx) + ' ' + f2(by + dy * 0.33 + ny) + ' ' + f2(bx + dx * 0.66 - nx) + ' ' + f2(by + dy * 0.66 - ny) + ' ' + f2(kx) + ' ' + f2(ky));
+          ball.setAttribute('transform', 'translate(' + f2(kx) + ' ' + f2(ky) + ') rotate(' + f2(tilt * 0.7) + ')');
+          string.setAttribute('opacity', f2(st.bop));
+          ball.setAttribute('opacity', f2(st.bop));
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.4, ease: 'power1.out' }, 0)
+          .to(st, { x: 0, y: 0, duration: D, ease: 'sine.inOut' }, 0)
+          .to(st, { wv: 16, duration: D + 1.7, ease: 'none' }, 0)
+          .to(st, { rel: 1, duration: 0.45, ease: 'power2.out' }, D + 0.25)
+          .to(st, { by: -2.4 * E, duration: 1.5, ease: 'power1.in' }, D + 0.15)
+          .to(st, { bx: 0.3 * E, duration: 1.5, ease: 'sine.inOut' }, D + 0.15)
+          .to(st, { bop: 0, duration: 0.6, ease: 'power1.in' }, D + 1.0);
+        touchdown(tl, st, D, 0.3);
+        render();
+        return { tl, land: D, rest: D + 0.64 };
+      },
+
+      // a nod to the security half: the point is locked on, decrypts in a few broken frames, and snaps solid
+      glitch(r) {
+        const ghosts = [0, 1].map((i) => {
+          const g = document.createElement('span');
+          g.className = 'intro-dot is-ghost' + (i ? ' is-fog' : '');
+          r.rig.insertBefore(g, r.dot);
+          return g;
+        });
+        const B = r.rr + 0.03 * E, arm = 0.05 * E;          // tight enough to stay clear of the g
+        const brk = svgEl('g', {}, r.svg);
+        [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, b]) =>
+          svgEl('path', { class: 'hair', d: 'M' + f2(a * B) + ' ' + f2(b * (B - arm)) + 'L' + f2(a * B) + ' ' + f2(b * B) + 'L' + f2(a * (B - arm)) + ' ' + f2(b * B) }, brk));
+        const scan = svgEl('path', { class: 'hair soft', d: 'M' + f2(-0.15 * E) + ' 0L' + f2(0.15 * E) + ' 0' }, r.svg);
+        const st = { bs: 1.5, bop: 0, scy: -0.2 * E, sop: 0, sx: 1, sy: 1, op: 0 };
+        const render = () => {
+          brk.setAttribute('transform', 'scale(' + f2(st.bs) + ')');
+          brk.setAttribute('opacity', f2(st.bop));
+          scan.setAttribute('transform', 'translate(0 ' + f2(st.scy) + ')');
+          scan.setAttribute('opacity', f2(st.sop));
+          place(r.dot, 0, 0, st.sx, st.sy);
+          r.dot.style.opacity = st.op;
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { bop: 1, duration: 0.18, ease: 'power1.out' }, 0)
+          .to(st, { bs: 1.12, duration: 0.4, ease: 'power3.out' }, 0)
+          .to(st, { sop: 0.8, duration: 0.05 }, 0.3)
+          .to(st, { scy: 0.2 * E, duration: 0.4, ease: 'power1.inOut' }, 0.3)
+          .to(st, { sop: 0, duration: 0.15 }, 0.62);
+        // broken frames at 24 fps, calming down as they go
+        const n = 13, t0 = 0.32;
+        for (let i = 0; i < n; i++) {
+          const q = i / (n - 1), k = 1 - q * 0.8, t = t0 + i / 24;
+          const solid = Math.random() < 0.3 + 0.5 * q;
+          tl.set(st, { op: solid ? 1 : (Math.random() < 0.5 ? 0 : 0.35) }, t);
+          ghosts.forEach((g) => {
+            const top = Math.random() * 60, h = 12 + Math.random() * 35;
+            tl.set(g, { x: (Math.random() * 2 - 1) * 0.12 * E * k, clipPath: 'inset(' + f2(top) + '% 0 ' + f2(Math.max(0, 100 - top - h)) + '% 0)', opacity: Math.random() < 0.7 ? 1 : 0 }, t);
+          });
+        }
+        const T = t0 + n / 24;
+        tl.set(st, { op: 1 }, T).set(ghosts, { opacity: 0 }, T)
+          .to(st, { bs: 1, duration: 0.18, ease: 'power3.out' }, T)
+          .to(st, { bop: 0, duration: 0.3, ease: 'power1.in' }, T + 0.22);
+        touchdown(tl, st, T, 0.3);
+        render();
+        return { tl, land: T, rest: T + 0.64 };
+      },
+
+      // rolls in along the baseline from the edge of the screen, runs a touch past, and rocks back into place
+      roll(r) {
+        const T1 = 1.15, XE = -0.05 * E, x0 = window.innerWidth - r.vx + r.rr + 0.05 * E;
+        const trail = svgEl('g', { class: 'soft' }, r.svg);
+        const l1 = svgEl('path', { class: 'hair' }, trail), l2 = svgEl('path', { class: 'hair' }, trail);
+        const st = { u: 0, rb: 0, sx: 1, sy: 1 };
+        const render = () => {
+          let x, v = 0;
+          if (st.rb > 0) x = XE * (1 - st.rb);
+          else { const w = 1 - st.u; x = x0 + (XE - x0) * (1 - w * w * w); v = (x0 - XE) * 3 * w * w / T1; }
+          const s = Math.min(0.16, v / E * 0.022);                 // stretched by its own speed
+          place(r.dot, x, 0, (1 + s) * st.sx, (1 - s * 0.6) * st.sy);
+          const len = Math.min(1.1 * E, v * 0.11), sx0 = x + r.rr * (1 + s) + 0.06 * E;
+          l1.setAttribute('d', 'M' + f2(sx0) + ' ' + f2(-0.4 * r.rr) + 'L' + f2(sx0 + len) + ' ' + f2(-0.4 * r.rr));
+          l2.setAttribute('d', 'M' + f2(sx0 + 0.04 * E) + ' ' + f2(0.4 * r.rr) + 'L' + f2(sx0 + 0.04 * E + len * 0.6) + ' ' + f2(0.4 * r.rr));
+          trail.setAttribute('opacity', len > 1 ? 1 : 0);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { u: 1, duration: T1, ease: 'none' }, 0)
+          .to(st, { rb: 1, duration: 0.42, ease: 'sine.inOut' }, T1)
+          .to(st, { sx: 1.06, sy: 0.95, duration: 0.08, ease: 'power2.in' }, T1 + 0.42)
+          .to(st, { sx: 1, sy: 1, duration: 0.5, ease: 'elastic.out(1.1, 0.45)' }, T1 + 0.5);
+        render();
+        return { tl, land: T1, rest: T1 + 1.0 };
+      }
+    };
+
+    const names = Object.keys(INTROS);
+    const asked = new URLSearchParams(window.location.search).get('intro');
+    const pick = INTROS.hasOwnProperty(asked) ? asked : names[Math.floor(Math.random() * names.length)];
+    const rig = pick === 'bounce' ? null : makeRig();
+    const intro = INTROS[pick](rig);
+    const boot = gsap.timeline();
+    boot.add(intro.tl, 0);
+    // the dot is at rest: the period comes back for one frame and hands over to the orb
+    boot.call(() => {
+      gsap.set(period, { clearProps: 'all' });
+      if (rig) rig.dot.remove();
+      takeover();
+    }, null, intro.rest);
+    if (rig) boot.call(() => rig.rig.remove(), null, Math.max(intro.rest, intro.tl.duration()) + 0.01);
+
+    // type comes in as the dot lands: lines rise in masks
+    const heroSplit = SplitText.create(heroLines, { type: 'lines', mask: 'lines', linesClass: 'ln' });
+    gsap.set(heroLines, { autoAlpha: 1 });
+    boot.from(heroSplit.lines, { yPercent: 110, duration: 0.9, ease: 'power3.out', stagger: 0.06 }, Math.max(0.6, intro.land - 0.8));
+    boot.fromTo(heroReveal, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.6, ease: 'power2.out', stagger: 0.08 }, '<0.3');
+
+    // when scrolling stops near a section top, the page settles onto it. magnetic, not
+    // automatic: only when the reader has stopped, only close to a stop, only ahead in the
+    // direction they were going (a short way back is allowed), and it eases in from rest
     if (lenis) {
-      const stopEls = ['#services', '#method', '#studio', '#brief'].map((q) => document.querySelector(q));
-      const stops = () => [0, ...stopEls.map((el) => el.getBoundingClientRect().top + window.scrollY - 64), document.documentElement.scrollHeight - window.innerHeight];
-      // magnetic, not automatic: only when the reader has stopped, only near a stop, and only
-      // ahead in the direction they were going (a short way back is allowed)
-      let idle = null, settling = false, lastY = window.scrollY, dir = 1, lastInput = 0;
-      ['wheel', 'touchmove', 'keydown'].forEach((ev) => window.addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true }));
+      let idle = null, settling = false, lastY = sy, dir = 1, lastInput = 0;
+      const inOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+      const release = () => {                            // any hand on the page wins over the settle
+        lastInput = performance.now();
+        if (settling) { settling = false; lenis.scrollTo(lenis.scroll, { immediate: true, force: true }); }
+      };
+      window.addEventListener('wheel', () => { lastInput = performance.now(); settling = false; }, { passive: true });
+      window.addEventListener('touchmove', () => { lastInput = performance.now(); }, { passive: true });
+      ['touchstart', 'pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, release, { passive: true }));
       lenis.on('scroll', () => {
-        const y = window.scrollY;
-        if (Math.abs(y - lastY) > 0.5) dir = y > lastY ? 1 : -1;
-        lastY = y;
+        if (Math.abs(sy - lastY) > 0.5) dir = sy > lastY ? 1 : -1;
+        lastY = sy;
         if (settling) return;
         clearTimeout(idle);
         idle = setTimeout(() => {
-          if (performance.now() - lastInput < 260) return;            // still scrolling
-          const list = stops();
-          let best = list[0]; list.forEach((v) => { if (Math.abs(v - y) < Math.abs(best - y)) best = v; });
-          const delta = best - y, dist = Math.abs(delta);
+          if (performance.now() - lastInput < 320) return;            // still scrolling
+          const list = C.stops.concat(lenis.limit);
+          let best = list[0]; list.forEach((v) => { if (Math.abs(v - sy) < Math.abs(best - sy)) best = v; });
+          const delta = best - sy, dist = Math.abs(delta);
           const ahead = Math.sign(delta) === dir;
-          if (dist > 2 && dist < (ahead ? window.innerHeight * 0.22 : 72)) {
+          if (dist > 2 && dist < (ahead ? C.vh * 0.12 : 40)) {
             settling = true;
-            lenis.scrollTo(best, { duration: 0.7, easing: (u) => 1 - Math.pow(1 - u, 3), onComplete: () => { setTimeout(() => { settling = false; }, 80); } });
-            setTimeout(() => { settling = false; }, 1400);           // never stay locked if the reader interrupts
+            lenis.scrollTo(best, { duration: 0.95, easing: inOut, onComplete: () => { setTimeout(() => { settling = false; }, 80); } });
+            setTimeout(() => { settling = false; }, 1600);           // never stay locked
           }
-        }, 220);
+        }, 350);
       });
     }
-  }
 
-  let rt;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => ScrollTrigger.refresh(), 150); });
+    // everything measured once more whenever the layout settles: resize, late fonts, line masks
+    ScrollTrigger.addEventListener('refresh', () => { placeGeoMarks(); sizeField(); measure(); });
+    ScrollTrigger.refresh();
+  }
 })();
