@@ -957,7 +957,8 @@
     };
 
     const names = Object.keys(INTROS);
-    const asked = new URLSearchParams(window.location.search).get('intro');
+    const query = new URLSearchParams(window.location.search);
+    const asked = query.get('intro'), loop = query.has('loop');   // ?loop replays the entrance for review: the page reloads a moment after the dot lands
     const pick = INTROS.hasOwnProperty(asked) ? asked : names[Math.floor(Math.random() * names.length)];
     const rig = makeRig();
     const intro = INTROS[pick](rig);
@@ -970,6 +971,7 @@
       takeover();
       introOver = true;
       if (fontsLate) dropKeeps();
+      if (loop) setTimeout(() => window.location.reload(), 1500);
     }, null, intro.rest);
     if (rig) boot.call(() => rig.rig.remove(), null, Math.max(intro.rest, intro.tl.duration()) + 0.01);
 
