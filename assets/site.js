@@ -78,6 +78,7 @@
       if (coarse && window.innerWidth === lastW) return;
       lastW = window.innerWidth;
       placeGeoMarks();
+      document.querySelectorAll('.intro-keep').forEach((n) => n.remove());   // the bounce's stand-ins are sized to the old layout
     }, 120);
   });
 
@@ -529,77 +530,156 @@
       .to(st, { sy: 1 - 0.4 * depth, sx: 1 + 0.35 * depth, duration: 0.09, ease: 'power2.in' }, t)
       .to(st, { sy: 1, sx: 1, duration: 0.55, ease: 'elastic.out(1.1, 0.45)' }, t + 0.09);
 
-    // the bounce. brand physics: gravity 2800, restitution 0.78, friction 0.78,
-    // integrated at load and played once. values in em of the wordmark.
-    function simulateBounce(scale) {
-      const o = {
-        holdBefore: 0.25, shortAntDur: 0.12, finalAntDur: 0.36, anticipationSquashY: 0.42,
-        startX: -640 * scale, startY: -200 * scale, launchVx: 490 * scale,
-        gravity: 2800 * scale, restitution: 0.78, friction: 0.78, fps: 120, maxBounces: 4,
-        settleThreshold: 80 * scale, impactSquashFloor: 0.5,
-        stretchPerVel: 0.00055 / scale, impactSquashCoef: 0.00045 / scale, settleDur: 0.3,
-      };
-      const S = [];
-      S.push({ t: 0, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
-      S.push({ t: o.holdBefore - 0.001, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
-      let t = o.holdBefore, dt = 1 / o.fps;
-      let x = o.startX, y = o.startY, vx = o.launchVx, vy = 0, bounces = 0, done = false;
-      while (!done && t < 12) {
-        vy += o.gravity * dt; x += vx * dt; y += vy * dt;
-        if (y >= 0) {
-          y = 0;
-          const imp = Math.abs(vy);
-          const syI = Math.max(o.impactSquashFloor, 1 - imp * o.impactSquashCoef);
-          S.push({ t, x, y: 0, sx: 1 + (1 - syI) * 0.7, sy: syI, op: 1 });
-          vy = -imp * o.restitution; vx *= o.friction; bounces++;
-          if (Math.abs(vy) < o.settleThreshold || bounces >= o.maxBounces) { done = true; continue; }
-          const finalWind = bounces === o.maxBounces - 1;
-          const antDur = finalWind ? o.finalAntDur : o.shortAntDur;
-          const deep = Math.max(o.anticipationSquashY, syI - (finalWind ? 0.12 : 0.05));
-          const n = Math.round(antDur * o.fps);
-          for (let i = 1; i <= n; i++) {
-            const u = i / n;
-            const e = finalWind ? u * u : (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
-            const sy = syI + (deep - syI) * e;
-            S.push({ t: t + antDur * u, x, y: 0, sx: 1 + (1 - sy) * 0.7, sy, op: 1 });
+    // the word's geometry, for the bounce: where each letter is (from layout) and the shape
+    // of its top (from one off-screen render of the glyph). the i is split into its stem and
+    // its tittle. y is baseline-relative, negative up; x is in h1 px.
+    function readWord() {
+      const span = h1.firstElementChild, text = span.textContent, tn = span.firstChild;
+      const cs = getComputedStyle(span);
+      const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+      const B = Math.ceil(fs * 1.05), CH = Math.ceil(fs * 1.35);
+      const h1r = h1.getBoundingClientRect(), range = document.createRange();
+      const terrain = new Map(), letters = [];
+      let tittle = null;
+      for (let k = 0; k < text.length; k++) {
+        range.setStart(tn, k); range.setEnd(tn, k + 1);
+        const left = Math.round(range.getBoundingClientRect().left - h1r.left);
+        cx.font = cs.fontWeight + ' ' + fs + 'px ' + cs.fontFamily;
+        const W = Math.ceil(cx.measureText(text[k]).width + fs * 0.4);
+        cv.width = W; cv.height = CH;
+        cx.font = cs.fontWeight + ' ' + fs + 'px ' + cs.fontFamily;
+        cx.fillText(text[k], 0, B);
+        const a = cx.getImageData(0, 0, W, CH).data;
+        // connected components: every letter is one, except the i, which is two
+        const lab = new Uint8Array(W * CH), comps = [], stack = [];
+        for (let y = 0; y < CH; y++) for (let x = 0; x < W; x++) {
+          if (lab[y * W + x] || a[(y * W + x) * 4 + 3] < 128) continue;
+          const c = { x0: x, x1: x, y0: y, y1: y, area: 0, top: new Map() };
+          comps.push(c); lab[y * W + x] = 1; stack.push(x, y);
+          while (stack.length) {
+            const yy = stack.pop(), xx = stack.pop();
+            c.area++;
+            if (xx < c.x0) c.x0 = xx; if (xx > c.x1) c.x1 = xx; if (yy < c.y0) c.y0 = yy; if (yy > c.y1) c.y1 = yy;
+            const t = c.top.get(xx); if (t === undefined || yy < t) c.top.set(xx, yy);
+            if (xx > 0 && !lab[yy * W + xx - 1] && a[(yy * W + xx - 1) * 4 + 3] > 127) { lab[yy * W + xx - 1] = 1; stack.push(xx - 1, yy); }
+            if (xx < W - 1 && !lab[yy * W + xx + 1] && a[(yy * W + xx + 1) * 4 + 3] > 127) { lab[yy * W + xx + 1] = 1; stack.push(xx + 1, yy); }
+            if (yy > 0 && !lab[(yy - 1) * W + xx] && a[((yy - 1) * W + xx) * 4 + 3] > 127) { lab[(yy - 1) * W + xx] = 1; stack.push(xx, yy - 1); }
+            if (yy < CH - 1 && !lab[(yy + 1) * W + xx] && a[((yy + 1) * W + xx) * 4 + 3] > 127) { lab[(yy + 1) * W + xx] = 1; stack.push(xx, yy + 1); }
           }
-          t += antDur;
-          S.push({ t, x, y: 0, sx: 0.85, sy: 1.18, op: 1 });
-          continue;
         }
-        const sy = 1 + Math.abs(vy) * o.stretchPerVel;
-        S.push({ t, x, y, sx: 2 - sy, sy, op: 1 });
-        t += dt;
+        let dot = null;
+        if (text[k] === 'i' && comps.length > 1) {
+          dot = comps.reduce((m, c) => (c.area < m.area ? c : m));
+          const w = dot.x1 + 1 - dot.x0, h = dot.y1 + 1 - dot.y0;
+          // its corner radius, from how much of its box it fills (a circle fills pi/4 of it)
+          const rc = Math.min(w, h) / 2 * Math.min(1, Math.sqrt(Math.max(0, (w * h - dot.area) / (4 - Math.PI))) / (Math.min(w, h) / 2));
+          tittle = { x: left + dot.x0 + w / 2, y: dot.y0 - B + h / 2, w, h, r: w / 2, corner: rc, top: dot.y0 - B };
+        }
+        const letter = { ch: text[k], top: Infinity, x: 0 };
+        comps.forEach((c) => {
+          if (c === dot) return;
+          c.top.forEach((y, col) => {
+            const X = left + col, Y = y - B;
+            if (!(terrain.get(X) < Y)) terrain.set(X, Y);
+            if (Y < letter.top) letter.top = Y;
+          });
+        });
+        // land in the middle of the letter's highest run
+        const cols = []; terrain.forEach((Y, X) => { if (Y === letter.top) cols.push(X); });
+        const own = cols.filter((X) => X >= left && X < left + W).sort((p, q) => p - q);
+        letter.x = own.length ? (own[0] + own[own.length - 1]) / 2 : left + W / 2;
+        letters.push(letter);
       }
-      const last = S[S.length - 1];
-      const n = Math.round(o.settleDur * o.fps);
-      for (let j = 1; j <= n; j++) {
-        const u = j / n, e = 1 - Math.pow(1 - u, 3);
-        S.push({ t: t + o.settleDur * u, x: last.x * (1 - e), y: 0, sx: last.sx + (1 - last.sx) * e, sy: last.sy + (1 - last.sy) * e, op: 1 });
-      }
-      t += o.settleDur;
-      S.push({ t, x: 0, y: 0, sx: 1, sy: 1, op: 1 });
-      return { samples: S, duration: t };
+      return { terrain, letters, tittle };
     }
 
     const INTROS = {
-      bounce() {
-        const sim = simulateBounce(fs / 160), S = sim.samples, st = { t: 0 };
-        let i = 1;
-        const tl = gsap.timeline().to(st, {
-          t: sim.duration, duration: sim.duration, ease: 'none',
-          onUpdate() {
-            const tt = st.t;
-            if (S[i - 1].t > tt) i = 1;                  // played back: start the search over
-            while (i < S.length - 1 && S[i].t < tt) i++;
-            const a = S[i - 1], b = S[i];
-            const u = b.t === a.t ? 1 : Math.min(1, Math.max(0, (tt - a.t) / (b.t - a.t)));
-            const mix = (k) => a[k] + (b[k] - a[k]) * u;
-            place(period, mix('x'), mix('y'), mix('sx'), mix('sy'));
-            period.style.opacity = mix('op');
+      // the brand bounce, on the word itself: in from the left, one hop per letter, no squash.
+      // on the i the ball knocks the tittle off; the tittle carries on over the n and the g and
+      // grows into the period, while the ball settles into the i's slot and shrinks to fit.
+      bounce(r) {
+        const G = 2800 * fs / 160;                          // px/s², the brand gravity
+        const R = r.rr, px = { x: period.offsetLeft + R, base: period.offsetTop + 2 * R };   // the period at rest; its bottom is the baseline
+        const word = readWord(), tit = word.tittle;
+        const terrainAt = (x) => { let m = Infinity; for (let X = Math.round(x - R * 0.5); X <= Math.round(x + R * 0.5); X++) { const v = word.terrain.get(X); if (v < m) m = v; } return m; };
+        // a hop: a ballistic arc from a to b in T seconds, raised until the ball clears every letter under it
+        const hop = (a, b, T) => {
+          for (let tries = 0; tries < 10; tries++) {
+            const seg = { x0: a.x, y0: a.y, r0: a.r, r1: b.r, T, vx: (b.x - a.x) / T, vy: (b.y - a.y - 0.5 * G * T * T) / T };
+            let clear = true;
+            for (let t = 0.02; t < T - 0.02 && clear; t += 0.01) {
+              const p = at(seg, t);
+              if (p.y + p.r + 1 > terrainAt(p.x)) clear = false;
+            }
+            if (clear) return seg;
+            T *= 1.12;
           }
-        });
-        return { tl, land: sim.duration, rest: sim.duration };
+          return { x0: a.x, y0: a.y, r0: a.r, r1: b.r, T, vx: (b.x - a.x) / T, vy: (b.y - a.y - 0.5 * G * T * T) / T };
+        };
+        const at = (s, t) => ({ x: s.x0 + s.vx * t, y: s.y0 + s.vy * t + 0.5 * G * t * t, r: s.r0 + (s.r1 - s.r0) * t / s.T });
+        const chain = (points, Ts, t0) => {                 // consecutive hops with their start times
+          const segs = []; let t = t0;
+          for (let i = 0; i + 1 < points.length; i++) { const s = hop(points[i], points[i + 1], Ts[i]); s.t0 = t; t += s.T; s.t1 = t; segs.push(s); }
+          return segs;
+        };
+        const on = (segs, t) => {                            // where a chain puts the ball at time t
+          if (t <= segs[0].t0) return at(segs[0], 0);
+          const s = segs.find((g) => t < g.t1) || segs[segs.length - 1];
+          return at(s, Math.min(s.T, t - s.t0));
+        };
+        // the ball's position: boxes are the period's, scaled about the bottom centre
+        const put = (el, p, s) => place(el, p.x - px.x, p.y + R * s, s, s);   // the box's bottom already sits on the baseline
+
+        const L = word.letters, lk = (ch, i) => L.filter((l) => l.ch === ch)[i || 0];
+        const onTop = (l, rad) => ({ x: l.x, y: terrainAt(l.x) - rad, r: rad });
+        const HOLD = 0.25, rest = { x: px.x, y: -R, r: R };
+        let ball = r.dot, segsA, segsB = null, tKnock = Infinity;
+        const big = { x: 0, y: 0, s: 1, br: '50%' }, small = { br: '50%' };
+        let cover = null;
+
+        if (tit) {
+          // the ball that stays is its own element, outside the rig, so it survives the rig's removal
+          ball = document.createElement('span');
+          ball.className = 'intro-dot intro-keep';
+          ball.style.left = period.offsetLeft + 'px'; ball.style.top = period.offsetTop + 'px';
+          ball.style.width = 2 * R + 'px'; ball.style.height = 2 * R + 'px';
+          cover = document.createElement('span');
+          cover.className = 'intro-cover intro-keep';
+          cover.style.left = (tit.x - tit.w / 2 - 1) + 'px'; cover.style.top = (px.base + tit.top - 1) + 'px';
+          cover.style.width = (tit.w + 2) + 'px'; cover.style.height = (tit.h + 2) + 'px';
+          h1.appendChild(cover); h1.appendChild(ball);
+          small.br = (tit.corner / tit.w * 100) + '%';
+          r.dot.style.borderRadius = small.br;
+          const f = onTop(lk('f'), R);
+          const pathA = [{ x: f.x - 1.6 * fs, y: f.y - 1.1 * fs, r: R }, f, onTop(lk('l'), R), onTop(lk('o'), R), onTop(lk('a'), R), onTop(lk('t'), R), { x: tit.x, y: tit.top - R, r: R }];
+          segsA = chain(pathA, [0.5, 0.27, 0.26, 0.25, 0.26, 0.26], HOLD);
+          tKnock = segsA[segsA.length - 1].t1;
+          const rn = tit.r + (R - tit.r) / 3, rg = tit.r + (R - tit.r) * 2 / 3;
+          segsB = chain([{ x: tit.x, y: tit.y, r: tit.r }, onTop(lk('n'), rn), onTop(lk('g'), rg), rest], [0.3, 0.28, 0.34], tKnock);
+          big.x = tit.x; big.y = tit.top - R;
+        } else {
+          // no separate tittle in this font: one ball, every letter, straight to the period
+          const f = onTop(lk('f'), R);
+          segsA = chain([{ x: f.x - 1.6 * fs, y: f.y - 1.1 * fs, r: R }].concat(L.map((l) => onTop(l, R)), [rest]), [0.5, 0.27, 0.26, 0.25, 0.26, 0.26, 0.26, 0.26, 0.34], HOLD);
+        }
+        const end = segsB ? segsB[segsB.length - 1].t1 : segsA[segsA.length - 1].t1;
+        const st = { t: 0 };
+        const render = () => {
+          const t = st.t;
+          if (t < tKnock) { put(ball, on(segsA, t), 1); ball.style.opacity = t < HOLD ? 0 : 1; }
+          else { put(ball, big, big.s); ball.style.borderRadius = big.br; }
+          if (segsB) {
+            const p = t < tKnock ? { x: tit.x, y: tit.y, r: tit.r } : on(segsB, t);
+            put(r.dot, p, p.r / R); r.dot.style.borderRadius = small.br;
+          }
+        };
+        const tl = gsap.timeline({ onUpdate: render }).to(st, { t: end, duration: end, ease: 'none' }, 0);
+        if (segsB) {
+          tl.to(big, { y: tit.y, s: tit.r / R, br: small.br, duration: 0.4, ease: 'power3.out' }, tKnock)   // settles into the slot
+            .to(small, { br: '50%', duration: segsB[0].T, ease: 'power1.out' }, tKnock);                 // the tittle rounds off in flight
+        }
+        render();
+        return { tl, land: end, rest: end };
       },
 
       // drifts down under a canopy, swinging gently; on landing the lines go slack and the canopy folds away
@@ -810,7 +890,7 @@
     const names = Object.keys(INTROS);
     const asked = new URLSearchParams(window.location.search).get('intro');
     const pick = INTROS.hasOwnProperty(asked) ? asked : names[Math.floor(Math.random() * names.length)];
-    const rig = pick === 'bounce' ? null : makeRig();
+    const rig = makeRig();
     const intro = INTROS[pick](rig);
     const boot = gsap.timeline();
     boot.add(intro.tl, 0);
