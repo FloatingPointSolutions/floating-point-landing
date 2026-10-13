@@ -599,51 +599,64 @@
       // runs into the tittle and knocks it off: the tittle flies over the n and the g and grows
       // into the period, while the ball rolls into the i's slot and shrinks to fit.
       bounce(r) {
-        const G = 2800 * fs / 160;                          // px/s², the brand gravity, for the tittle's flight
         const R = r.rr, px = { x: period.offsetLeft + R, base: period.offsetTop + 2 * R };   // the period at rest; its bottom is the baseline
         const word = readWord(), tit = word.tittle;
         const terrainAt = (x) => { let m = Infinity; for (let X = Math.round(x - R * 0.5); X <= Math.round(x + R * 0.5); X++) { const v = word.terrain.get(X); if (v < m) m = v; } return m; };
-        // a hop: a ballistic arc from a to b in T seconds, raised until the ball clears every letter under it
-        const at = (s, t) => ({ x: s.x0 + s.vx * t, y: s.y0 + s.vy * t + 0.5 * G * t * t, r: s.r0 + (s.r1 - s.r0) * t / s.T });
-        const hop = (a, b, T, t0) => {
-          let seg;
-          for (let tries = 0; tries < 10; tries++, T *= 1.12) {
-            seg = { x0: a.x, y0: a.y, r0: a.r, r1: b.r, T, vx: (b.x - a.x) / T, vy: (b.y - a.y - 0.5 * G * T * T) / T };
+        // the flight of something knocked: it pops off to the right, carries over the letters and
+        // drops straight down onto its spot. a cubic, lifted until it clears every letter under it
+        const bez = (p0, p1, p2, p3, u) => { const v = 1 - u; return { x: v * v * v * p0.x + 3 * v * v * u * p1.x + 3 * v * u * u * p2.x + u * u * u * p3.x, y: v * v * v * p0.y + 3 * v * v * u * p1.y + 3 * v * u * u * p2.y + u * u * u * p3.y }; };
+        const arc = (a, b, T, t0) => {
+          let lift = 0.3 * fs, c1, c2;
+          for (let tries = 0; tries < 8; tries++, lift *= 1.15) {
+            c1 = { x: a.x + 0.35 * fs, y: a.y - lift }; c2 = { x: b.x, y: b.y - 1.4 * lift };
             let clear = true;
-            for (let t = 0.02; t < T - 0.02 && clear; t += 0.01) { const p = at(seg, t); if (p.y + p.r + 1 > terrainAt(p.x)) clear = false; }
+            for (let u = 0.03; u < 0.97 && clear; u += 0.01) { const p = bez(a, c1, c2, b, u); if (p.y + a.r + (b.r - a.r) * u + 1 > terrainAt(p.x)) clear = false; }
             if (clear) break;
           }
-          seg.t0 = t0; seg.t1 = t0 + seg.T;
-          return seg;
+          return { a, b, c1, c2, T, t0, t1: t0 + T };
         };
-        // the ride: the ball's centre as it rests on whatever ink is within a radius of it. gaps
-        // narrower than the ball are bridged at the depth it sinks to; a corner is rounded; a wall
-        // is a sheer segment in the polyline, walked at the same speed as everything else
-        const ride = (x) => {
+        const flyAt = (f, t) => {
+          const u = Math.min(1, Math.max(0, t / f.T)), p = bez(f.a, f.c1, f.c2, f.b, u * u * (3 - 2 * u));
+          p.r = f.a.r + (f.b.r - f.a.r) * u;
+          return p;
+        };
+        // the line: a big imaginary wheel rolls the top edge of the word and the ball hangs at
+        // the bottom of it, so corners come out as wide arcs and gaps as shallow dips. that line
+        // is softened once more and floated a little above the ink, so the ball never grazes a
+        // letter: a roller coaster laid loosely over the word
+        const ride = (x, rad) => {                           // the centre of a wheel of that radius resting on the ink within reach
           let m = Infinity;
-          for (let c = Math.ceil(x - R); c <= Math.floor(x + R); c++) {
+          for (let c = Math.ceil(x - rad); c <= Math.floor(x + rad); c++) {
             const t = word.terrain.get(c);
             if (t === undefined) continue;
-            const y = t - Math.sqrt(Math.max(0, R * R - (c - x) * (c - x)));
+            const y = t - Math.sqrt(Math.max(0, rad * rad - (c - x) * (c - x)));
             if (y < m) m = y;
           }
           return m;
         };
         let xMin = Infinity, xMax = -Infinity;
         word.terrain.forEach((y, x) => { if (x < xMin) xMin = x; if (x > xMax) xMax = x; });
-        const xIn = xMin - 1.3 * fs, xStop = tit ? tit.x : xMax + R;
-        const pts = [];
+        const WHEEL = 2.4 * R, LIFT = 0.05 * fs, GAP = 0.02 * fs;
+        const xIn = Math.round(xMin - 1.3 * fs), xOut = Math.round((tit ? tit.x : xMax) + R);
+        const xs = [], ys = [];
         let first = -1;
-        for (let x = Math.round(xIn); x <= xStop; x++) {
-          const y = ride(x);
-          if (y === Infinity) { pts.push({ x, y: NaN }); continue; }
-          if (first < 0) first = pts.length;
-          pts.push({ x, y });
-          if (tit && Math.hypot(x - tit.x, y - tit.y) <= R + tit.r) break;   // it has reached the tittle
+        for (let x = xIn; x <= xOut; x++) {
+          const y = ride(x, WHEEL);
+          xs.push(x); ys.push(y === Infinity ? NaN : y + WHEEL - R - LIFT);
+          if (first < 0 && y !== Infinity) first = xs.length - 1;
         }
-        // the way in: a long shallow descent onto the first letter
-        const smooth = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
-        for (let i = 0; i < first; i++) pts[i].y = pts[first].y - 0.6 * fs * smooth((pts[first].x - pts[i].x) / (pts[first].x - pts[0].x));
+        for (let i = 0; i < first; i++) ys[i] = ys[first] - 0.6 * fs * smooth((xs[first] - xs[i]) / (xs[first] - xs[0]));   // the way in: a long shallow descent
+        for (let i = first + 1; i < ys.length; i++) if (isNaN(ys[i])) ys[i] = ys[i - 1];
+        const sig = 0.12 * fs, K = Math.ceil(3 * sig), kern = [];
+        for (let k = -K; k <= K; k++) kern.push(Math.exp(-k * k / (2 * sig * sig)));
+        const pts = [];
+        for (let i = 0; i < xs.length; i++) {
+          let s = 0, w = 0;
+          for (let k = -K; k <= K; k++) { const j = Math.min(ys.length - 1, Math.max(0, i + k)); s += ys[j] * kern[k + K]; w += kern[k + K]; }
+          const y = Math.min(s / w, ride(xs[i], R) - GAP);   // softened, but never into the ink
+          pts.push({ x: xs[i], y });
+          if (tit && Math.hypot(xs[i] - tit.x, y - tit.y) <= R + tit.r) break;   // it has reached the tittle
+        }
         const cum = [0];
         for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
         const length = cum[cum.length - 1];
@@ -676,10 +689,10 @@
           h1.insertBefore(cover, r.rig); h1.appendChild(ball);
           small.br = (tit.corner / tit.w * 100) + '%';
           r.dot.style.borderRadius = small.br;
-          flight = hop({ x: tit.x, y: tit.y, r: tit.r }, rest, 0.55, tKnock);   // knocked clean over the n and the g
+          flight = arc({ x: tit.x, y: tit.y, r: tit.r }, rest, 0.6, tKnock);   // knocked clean over the n and the g
         } else {
           // no separate tittle in this font: the one ball rides every letter, then drops onto the period
-          flight = hop({ x: contact.x, y: contact.y, r: R }, rest, 0.4, tKnock);
+          flight = arc({ x: contact.x, y: contact.y, r: R }, rest, 0.45, tKnock);
         }
         const end = flight.t1;
         const st = { t: 0 };
@@ -688,7 +701,7 @@
           if (t < tKnock) { put(ball, along(t), 1); ball.style.opacity = t < HOLD ? 0 : 1; }
           else if (tit) { put(ball, big, big.s); ball.style.borderRadius = big.br; }
           if (tit && t < tKnock) put(r.dot, { x: tit.x, y: tit.y }, tit.r / R);
-          else { const p = at(flight, Math.min(flight.T, Math.max(0, t - tKnock))); put(r.dot, p, p.r / R); }
+          else { const p = flyAt(flight, t - tKnock); put(r.dot, p, p.r / R); }
           r.dot.style.borderRadius = small.br;
         };
         const tl = gsap.timeline({ onUpdate: render }).to(st, { t: end, duration: end, ease: 'none' }, 0);
