@@ -187,6 +187,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .intro-dot { position: absolute; inset: 0; border-radius: 50%; background: var(--ink); transform-origin: 50% 100%; }
 .intro-dot.is-ghost { opacity: 0; }
 .intro-dot.is-fog { background: var(--fog); }
+/* the bounce leaves two things behind: paper over the i's own tittle, and the ball that took its place */
+.intro-keep { inset: auto; pointer-events: none; }
+.intro-cover { position: absolute; background: var(--paper); }
 .intro-svg { position: absolute; left: 50%; top: 50%; overflow: visible; }
 .intro-svg * { vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
 .intro-svg .hair { fill: none; stroke: currentColor; stroke-width: var(--hair, 1.5px); }

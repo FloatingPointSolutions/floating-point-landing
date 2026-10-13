@@ -78,6 +78,7 @@
       if (coarse && window.innerWidth === lastW) return;
       lastW = window.innerWidth;
       placeGeoMarks();
+      dropKeeps();   // the bounce's stand-ins are sized to the old layout
     }, 120);
   });
 
@@ -113,9 +114,17 @@
   gsap.set([heroLines, heroReveal], { autoAlpha: 0 });
 
   const fontsIn = document.fonts && document.fonts.load
-    ? Promise.race([document.fonts.load('600 1em Inter').then(() => document.fonts.ready), new Promise((r) => setTimeout(r, 800))]).catch(() => {})
+    ? Promise.race([document.fonts.load('600 1em Inter').then(() => document.fonts.ready), new Promise((r) => setTimeout(r, 2000))]).catch(() => {})
     : Promise.resolve();
-  fontsIn.then(start);
+  // the bounce leaves its stand-ins on the page, measured against the glyphs. if the font came
+  // in after that, they sit in the wrong place: take them away once the entrance is over and
+  // let the real glyph show. the resize path does the same
+  const dropKeeps = () => document.querySelectorAll('.intro-keep').forEach((n) => n.remove());
+  let fontsLate = false, introOver = false;
+  fontsIn.then(() => {
+    if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { fontsLate = true; if (introOver) dropKeeps(); });
+    start();
+  });
 
   function start() {
     const smooth = (u) => { u = Math.min(1, Math.max(0, u)); return u * u * (3 - 2 * u); };
@@ -490,7 +499,7 @@
     /* ------------------------------------------------------------------
        the entrance. the period arrives a different way on each visit: the
        brand bounce, under a parachute, on a cloud, tied to a balloon, decrypted,
-       or rolling in. every one ends the same way: the dot meets the baseline,
+       rolling in, out of a ninja's smoke, or up in a lift. every one ends the same way: the dot meets the baseline,
        squashes, settles, and the orb takes its place. props are ink hairlines
        on paper, sized in em of the wordmark. ?intro=<name> picks one.
        ------------------------------------------------------------------ */
@@ -529,77 +538,217 @@
       .to(st, { sy: 1 - 0.4 * depth, sx: 1 + 0.35 * depth, duration: 0.09, ease: 'power2.in' }, t)
       .to(st, { sy: 1, sx: 1, duration: 0.55, ease: 'elastic.out(1.1, 0.45)' }, t + 0.09);
 
-    // the bounce. brand physics: gravity 2800, restitution 0.78, friction 0.78,
-    // integrated at load and played once. values in em of the wordmark.
-    function simulateBounce(scale) {
-      const o = {
-        holdBefore: 0.25, shortAntDur: 0.12, finalAntDur: 0.36, anticipationSquashY: 0.42,
-        startX: -640 * scale, startY: -200 * scale, launchVx: 490 * scale,
-        gravity: 2800 * scale, restitution: 0.78, friction: 0.78, fps: 120, maxBounces: 4,
-        settleThreshold: 80 * scale, impactSquashFloor: 0.5,
-        stretchPerVel: 0.00055 / scale, impactSquashCoef: 0.00045 / scale, settleDur: 0.3,
-      };
-      const S = [];
-      S.push({ t: 0, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
-      S.push({ t: o.holdBefore - 0.001, x: o.startX, y: o.startY, sx: 1, sy: 1, op: 0 });
-      let t = o.holdBefore, dt = 1 / o.fps;
-      let x = o.startX, y = o.startY, vx = o.launchVx, vy = 0, bounces = 0, done = false;
-      while (!done && t < 12) {
-        vy += o.gravity * dt; x += vx * dt; y += vy * dt;
-        if (y >= 0) {
-          y = 0;
-          const imp = Math.abs(vy);
-          const syI = Math.max(o.impactSquashFloor, 1 - imp * o.impactSquashCoef);
-          S.push({ t, x, y: 0, sx: 1 + (1 - syI) * 0.7, sy: syI, op: 1 });
-          vy = -imp * o.restitution; vx *= o.friction; bounces++;
-          if (Math.abs(vy) < o.settleThreshold || bounces >= o.maxBounces) { done = true; continue; }
-          const finalWind = bounces === o.maxBounces - 1;
-          const antDur = finalWind ? o.finalAntDur : o.shortAntDur;
-          const deep = Math.max(o.anticipationSquashY, syI - (finalWind ? 0.12 : 0.05));
-          const n = Math.round(antDur * o.fps);
-          for (let i = 1; i <= n; i++) {
-            const u = i / n;
-            const e = finalWind ? u * u : (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
-            const sy = syI + (deep - syI) * e;
-            S.push({ t: t + antDur * u, x, y: 0, sx: 1 + (1 - sy) * 0.7, sy, op: 1 });
+    // the word's geometry, for the bounce: where each letter is (from layout) and the shape
+    // of its top (from one off-screen render of the glyph). the i is split into its stem and
+    // its tittle. y is baseline-relative, negative up; x is in h1 px.
+    function readWord() {
+      const span = h1.firstElementChild, text = span.textContent, tn = span.firstChild;
+      const cs = getComputedStyle(span);
+      const cv = document.createElement('canvas'), cx = cv.getContext('2d', { willReadFrequently: true });
+      const B = Math.ceil(fs * 1.05), CH = Math.ceil(fs * 1.35);
+      const h1r = h1.getBoundingClientRect(), range = document.createRange();
+      const terrain = new Map(), letters = [];
+      let tittle = null;
+      for (let k = 0; k < text.length; k++) {
+        range.setStart(tn, k); range.setEnd(tn, k + 1);
+        const left = Math.round(range.getBoundingClientRect().left - h1r.left);
+        cx.font = cs.fontWeight + ' ' + fs + 'px ' + cs.fontFamily;
+        const W = Math.ceil(cx.measureText(text[k]).width + fs * 0.4);
+        cv.width = W; cv.height = CH;
+        cx.font = cs.fontWeight + ' ' + fs + 'px ' + cs.fontFamily;
+        cx.fillText(text[k], 0, B);
+        const a = cx.getImageData(0, 0, W, CH).data;
+        // connected components: every letter is one, except the i, which is two
+        const lab = new Uint8Array(W * CH), comps = [], stack = [];
+        for (let y = 0; y < CH; y++) for (let x = 0; x < W; x++) {
+          if (lab[y * W + x] || a[(y * W + x) * 4 + 3] < 128) continue;
+          const c = { x0: x, x1: x, y0: y, y1: y, area: 0, top: new Map() };
+          comps.push(c); lab[y * W + x] = 1; stack.push(x, y);
+          while (stack.length) {
+            const yy = stack.pop(), xx = stack.pop();
+            c.area++;
+            if (xx < c.x0) c.x0 = xx; if (xx > c.x1) c.x1 = xx; if (yy < c.y0) c.y0 = yy; if (yy > c.y1) c.y1 = yy;
+            const t = c.top.get(xx); if (t === undefined || yy < t) c.top.set(xx, yy);
+            if (xx > 0 && !lab[yy * W + xx - 1] && a[(yy * W + xx - 1) * 4 + 3] > 127) { lab[yy * W + xx - 1] = 1; stack.push(xx - 1, yy); }
+            if (xx < W - 1 && !lab[yy * W + xx + 1] && a[(yy * W + xx + 1) * 4 + 3] > 127) { lab[yy * W + xx + 1] = 1; stack.push(xx + 1, yy); }
+            if (yy > 0 && !lab[(yy - 1) * W + xx] && a[((yy - 1) * W + xx) * 4 + 3] > 127) { lab[(yy - 1) * W + xx] = 1; stack.push(xx, yy - 1); }
+            if (yy < CH - 1 && !lab[(yy + 1) * W + xx] && a[((yy + 1) * W + xx) * 4 + 3] > 127) { lab[(yy + 1) * W + xx] = 1; stack.push(xx, yy + 1); }
           }
-          t += antDur;
-          S.push({ t, x, y: 0, sx: 0.85, sy: 1.18, op: 1 });
-          continue;
         }
-        const sy = 1 + Math.abs(vy) * o.stretchPerVel;
-        S.push({ t, x, y, sx: 2 - sy, sy, op: 1 });
-        t += dt;
+        let dot = null;
+        if (text[k] === 'i' && comps.length > 1) {
+          dot = comps.reduce((m, c) => (c.area < m.area ? c : m));
+          const w = dot.x1 + 1 - dot.x0, h = dot.y1 + 1 - dot.y0;
+          // its corner radius, from how much of its box it fills (a circle fills pi/4 of it)
+          const rc = Math.min(w, h) / 2 * Math.min(1, Math.sqrt(Math.max(0, (w * h - dot.area) / (4 - Math.PI))) / (Math.min(w, h) / 2));
+          tittle = { x: left + dot.x0 + w / 2, y: dot.y0 - B + h / 2, w, h, r: w / 2, corner: rc, top: dot.y0 - B };
+        }
+        const letter = { ch: text[k], top: Infinity, x: 0 };
+        comps.forEach((c) => {
+          if (c === dot) return;
+          c.top.forEach((y, col) => {
+            const X = left + col, Y = y - B;
+            if (!(terrain.get(X) < Y)) terrain.set(X, Y);
+            if (Y < letter.top) letter.top = Y;
+          });
+        });
+        // land in the middle of the letter's highest run
+        const cols = []; terrain.forEach((Y, X) => { if (Y === letter.top) cols.push(X); });
+        const own = cols.filter((X) => X >= left && X < left + W).sort((p, q) => p - q);
+        letter.x = own.length ? (own[0] + own[own.length - 1]) / 2 : left + W / 2;
+        letters.push(letter);
       }
-      const last = S[S.length - 1];
-      const n = Math.round(o.settleDur * o.fps);
-      for (let j = 1; j <= n; j++) {
-        const u = j / n, e = 1 - Math.pow(1 - u, 3);
-        S.push({ t: t + o.settleDur * u, x: last.x * (1 - e), y: 0, sx: last.sx + (1 - last.sx) * e, sy: last.sy + (1 - last.sy) * e, op: 1 });
-      }
-      t += o.settleDur;
-      S.push({ t, x: 0, y: 0, sx: 1, sy: 1, op: 1 });
-      return { samples: S, duration: t };
+      return { terrain, letters, tittle };
     }
 
     const INTROS = {
-      bounce() {
-        const sim = simulateBounce(fs / 160), S = sim.samples, st = { t: 0 };
-        let i = 1;
-        const tl = gsap.timeline().to(st, {
-          t: sim.duration, duration: sim.duration, ease: 'none',
-          onUpdate() {
-            const tt = st.t;
-            if (S[i - 1].t > tt) i = 1;                  // played back: start the search over
-            while (i < S.length - 1 && S[i].t < tt) i++;
-            const a = S[i - 1], b = S[i];
-            const u = b.t === a.t ? 1 : Math.min(1, Math.max(0, (tt - a.t) / (b.t - a.t)));
-            const mix = (k) => a[k] + (b[k] - a[k]) * u;
-            place(period, mix('x'), mix('y'), mix('sx'), mix('sy'));
-            period.style.opacity = mix('op');
+      // the brand ball, on the word itself: in from the left, it rides the top edge of the
+      // letters, hugging every corner and dipping into every gap, with no squash. at the i it
+      // runs into the tittle and knocks it off: the tittle flies over the n and the g and grows
+      // into the period, while the ball rolls into the i's slot and shrinks to fit.
+      bounce(r) {
+        const R = r.rr, px = { x: period.offsetLeft + R, base: period.offsetTop + 2 * R };   // the period at rest; its bottom is the baseline
+        const word = readWord(), tit = word.tittle;
+        const terrainAt = (x) => { let m = Infinity; for (let X = Math.round(x - R * 0.5); X <= Math.round(x + R * 0.5); X++) { const v = word.terrain.get(X); if (v < m) m = v; } return m; };
+        // the flight of something knocked: it pops off to the right, carries over the letters and
+        // drops straight down onto its spot. a cubic, lifted until it clears every letter under it
+        const bez = (p0, p1, p2, p3, u) => { const v = 1 - u; return { x: v * v * v * p0.x + 3 * v * v * u * p1.x + 3 * v * u * u * p2.x + u * u * u * p3.x, y: v * v * v * p0.y + 3 * v * v * u * p1.y + 3 * v * u * u * p2.y + u * u * u * p3.y }; };
+        const arc = (a, b, T, t0) => {
+          let lift = 0.3 * fs, c1, c2;
+          for (let tries = 0; tries < 8; tries++, lift *= 1.15) {
+            c1 = { x: a.x + 0.35 * fs, y: a.y - lift }; c2 = { x: b.x, y: b.y - 1.4 * lift };
+            let clear = true;
+            for (let u = 0.03; u < 0.97 && clear; u += 0.01) { const p = bez(a, c1, c2, b, u); if (p.y + a.r + (b.r - a.r) * u + 1 > terrainAt(p.x)) clear = false; }
+            if (clear) break;
           }
-        });
-        return { tl, land: sim.duration, rest: sim.duration };
+          return { a, b, c1, c2, T, t0, t1: t0 + T };
+        };
+        const flyAt = (f, t) => {                            // flicked off fast, a long hover at the top, then a fall slowed by the air
+          const u = Math.min(1, Math.max(0, t / f.T));
+          let e;
+          if (u < 0.28) { const w = u / 0.28; e = 0.5 * (1 - (1 - w) * (1 - w) * (1 - w)); }
+          else { const w = (u - 0.28) / 0.72; e = 0.5 + 0.5 * w * w * (3 - 2 * w); }
+          const p = bez(f.a, f.c1, f.c2, f.b, e);
+          p.r = f.a.r + (f.b.r - f.a.r) * u;
+          return p;
+        };
+        // the line: a big imaginary wheel rolls the top edge of the word and the ball hangs at
+        // the bottom of it, so corners come out as wide arcs and gaps as shallow dips. that line
+        // is softened once more and floated a little above the ink, so the ball never grazes a
+        // letter: a roller coaster laid loosely over the word
+        const ride = (x, rad) => {                           // the centre of a wheel of that radius resting on the ink within reach
+          let m = Infinity;
+          for (let c = Math.ceil(x - rad); c <= Math.floor(x + rad); c++) {
+            const t = word.terrain.get(c);
+            if (t === undefined) continue;
+            const y = t - Math.sqrt(Math.max(0, rad * rad - (c - x) * (c - x)));
+            if (y < m) m = y;
+          }
+          return m;
+        };
+        let xMin = Infinity, xMax = -Infinity;
+        word.terrain.forEach((y, x) => { if (x < xMin) xMin = x; if (x > xMax) xMax = x; });
+        const WHEEL = 2.4 * R, LIFT = 0.05 * fs, GAP = 0.02 * fs;
+        const xIn = Math.round(xMin - 0.6 * fs), xOut = Math.round((tit ? tit.x : xMax) + R);
+        const xs = [], ys = [];
+        let first = -1;
+        for (let x = xIn; x <= xOut; x++) {
+          const y = ride(x, WHEEL);
+          xs.push(x); ys.push(y === Infinity ? NaN : y + WHEEL - R - LIFT);
+          if (first < 0 && y !== Infinity) first = xs.length - 1;
+        }
+        for (let i = 0; i < first; i++) ys[i] = ys[first];   // a level lead-in, only so the softening has something to lean on
+        for (let i = first + 1; i < ys.length; i++) if (isNaN(ys[i])) ys[i] = ys[i - 1];
+        const sig = 0.12 * fs, K = Math.ceil(3 * sig), kern = [];
+        for (let k = -K; k <= K; k++) kern.push(Math.exp(-k * k / (2 * sig * sig)));
+        const rail = [];
+        for (let i = first; i < xs.length; i++) {
+          let s = 0, w = 0;
+          for (let k = -K; k <= K; k++) { const j = Math.min(ys.length - 1, Math.max(0, i + k)); s += ys[j] * kern[k + K]; w += kern[k + K]; }
+          const y = Math.min(s / w, ride(xs[i], R) - GAP);   // softened, but never into the ink
+          rail.push({ x: xs[i], y });
+          if (tit && Math.hypot(xs[i] - tit.x, y - tit.y) <= R + tit.r) break;   // it has reached the tittle
+        }
+        // the way in: a fall from above and a little left of the f, on a slant, that bends over the
+        // f and lands on the rail at the crest of the l. anchored to the letters, so it stays
+        // inside the page at every width
+        const lx = (word.letters.find((l) => l.ch === 'l') || word.letters[0]).x, fx = word.letters[0].x;
+        let j = rail.findIndex((q) => q.x >= lx); if (j < 0 || j > rail.length - 20) j = 0;
+        const join = rail[j], top = { x: fx - 0.35 * fs, y: join.y - 1.1 * fs };
+        const drop = [];
+        for (let k = 0; k < 60; k++) drop.push(bez(top, { x: fx - 0.06 * fs, y: join.y - 0.42 * fs }, { x: join.x - 0.3 * fs, y: join.y - 0.02 * fs }, join, k / 60));
+        const pts = drop.concat(rail.slice(j));
+        first = drop.length;
+        // the pace: a coaster's, in one piece. the fall starts from near rest and gathers speed
+        // under its own pull, landing on the rail at VIN; from there speed follows the height
+        // below the crest it landed on, so it carries its momentum over the l, runs through the
+        // dips, brakes on the climbs, and gets one last push into the tittle
+        const cum = [0];
+        for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+        const length = cum[cum.length - 1];
+        const V0 = 0.6 * fs, VIN = 2.4 * fs, GRAV = 20 * fs;   // px/s at the top of the fall, px/s landing on the rail, px/s² along it
+        const yTop = pts[0].y, yJoin = pts[first].y;
+        const GFALL = (VIN * VIN - V0 * V0) / (2 * Math.max(1, yJoin - yTop));   // the fall's pull, so it lands at exactly VIN
+        const tim = [0];
+        for (let i = 1; i < pts.length; i++) {
+          const y = (pts[i].y + pts[i - 1].y) / 2;
+          let v = i <= first
+            ? Math.sqrt(V0 * V0 + 2 * GFALL * Math.max(0, y - yTop))
+            : Math.sqrt(Math.max(0.25 * VIN * VIN, VIN * VIN + 2 * GRAV * (y - yJoin)));
+          if (tit) v *= 1 + 0.5 * smooth(1 - (length - cum[i]) / (0.4 * fs));   // the push, over the last bit before the tittle
+          tim.push(tim[i - 1] + (cum[i] - cum[i - 1]) / v);
+        }
+        const HOLD = 0.25, ROLL = tim[tim.length - 1];
+        const tKnock = HOLD + ROLL;
+        const along = (t) => {                               // where the ride puts the ball at time t
+          const tt = Math.min(ROLL, Math.max(0, t - HOLD));
+          let i = 1; while (i < tim.length - 1 && tim[i] < tt) i++;
+          const u = (tt - tim[i - 1]) / ((tim[i] - tim[i - 1]) || 1);
+          return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * u, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * u };
+        };
+        const contact = pts[pts.length - 1];
+        // the ball's position: boxes are the period's, scaled about the bottom centre
+        const put = (el, p, s) => place(el, p.x - px.x, p.y + R * s, s, s);   // the box's bottom already sits on the baseline
+
+        const rest = { x: px.x, y: -R, r: R };
+        let ball = r.dot, flight, cover = null;
+        const big = { x: contact.x, y: contact.y, s: 1, br: '50%' }, small = { br: '50%' };
+        if (tit) {
+          // the ball that stays is its own element, outside the rig, so it survives the rig's removal.
+          // the cover goes under the rig, so the stand-in tittle shows from the first frame
+          ball = document.createElement('span');
+          ball.className = 'intro-dot intro-keep';
+          ball.style.left = period.offsetLeft + 'px'; ball.style.top = period.offsetTop + 'px';
+          ball.style.width = 2 * R + 'px'; ball.style.height = 2 * R + 'px';
+          cover = document.createElement('span');
+          cover.className = 'intro-cover intro-keep';
+          cover.style.left = (tit.x - tit.w / 2 - 1) + 'px'; cover.style.top = (px.base + tit.top - 1) + 'px';
+          cover.style.width = (tit.w + 2) + 'px'; cover.style.height = (tit.h + 2) + 'px';
+          h1.insertBefore(cover, r.rig); h1.appendChild(ball);
+          small.br = (tit.corner / tit.w * 100) + '%';
+          r.dot.style.borderRadius = small.br;
+          flight = arc({ x: tit.x, y: tit.y, r: tit.r }, rest, 1.05, tKnock);   // knocked clean over the n and the g
+        } else {
+          // no separate tittle in this font: the one ball rides every letter, then drops onto the period
+          flight = arc({ x: contact.x, y: contact.y, r: R }, rest, 0.45, tKnock);
+        }
+        const end = flight.t1;
+        const st = { t: 0 };
+        const render = () => {
+          const t = st.t;
+          if (t < tKnock) { put(ball, along(t), 1); ball.style.opacity = Math.min(1, Math.max(0, (t - HOLD) / 0.2)); }   // fades in as it starts to fall
+          else if (tit) { put(ball, big, big.s); ball.style.borderRadius = big.br; }
+          if (tit && t < tKnock) put(r.dot, { x: tit.x, y: tit.y }, tit.r / R);
+          else { const p = flyAt(flight, t - tKnock); put(r.dot, p, p.r / R); }
+          r.dot.style.borderRadius = small.br;
+        };
+        const tl = gsap.timeline({ onUpdate: render }).to(st, { t: end, duration: end, ease: 'none' }, 0);
+        if (tit) {
+          tl.to(big, { x: tit.x, y: tit.y, s: tit.r / R, br: small.br, duration: 0.26, ease: 'power4.out' }, tKnock)   // stops dead and drops into the slot
+            .to(small, { br: '50%', duration: 0.18, ease: 'power1.out' }, tKnock);                                    // the tittle rounds off as it goes
+        }
+        render();
+        return { tl, land: end, rest: end };
       },
 
       // drifts down under a canopy, swinging gently; on landing the lines go slack and the canopy folds away
@@ -804,13 +953,105 @@
           .to(st, { sx: 1, sy: 1, duration: 0.5, ease: 'elastic.out(1.1, 0.45)' }, T1 + 0.5);
         render();
         return { tl, land: T1, rest: T1 + 1.0 };
+      },
+
+      // a ninja's entrance: a little bomb is lobbed in from off the right and hits the baseline
+      // where the period belongs. a burst of smoke, drawn as outlined puffs that spread, rise and
+      // thin out, and when it clears the dot is simply there
+      smoke(r) {
+        const bomb = svgEl('g', {}, r.svg);
+        svgEl('circle', { class: 'solid', cx: 0, cy: 0, r: f2(0.045 * E) }, bomb);
+        svgEl('path', { class: 'hair', d: 'M0 ' + f2(-0.04 * E) + 'Q' + f2(0.02 * E) + ' ' + f2(-0.11 * E) + ' ' + f2(0.08 * E) + ' ' + f2(-0.1 * E) }, bomb);   // the fuse
+        const rays = svgEl('g', { class: 'soft' }, r.svg);
+        const RAY = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => { const a = (i + 0.5) * Math.PI / 4; return { c: Math.cos(a), s: Math.sin(a), el: svgEl('path', { class: 'hair' }, rays) }; });
+        // the smoke sits in front of the dot, so the dot is hidden until the puffs have spread.
+        // the same outline trick as the cloud: every puff stroked at double weight, then filled
+        // over, so the lot reads as one shape with one edge
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const cloud = svgEl('g', {}, front);
+        const outline = svgEl('g', { class: 'hair double' }, cloud), fill = svgEl('g', { class: 'cloud-fill' }, cloud);
+        // angle, how far it travels, how big it grows: most of it goes up, two big ones sit over the dot at first
+        const PUFF = [[-90, 0.3, 0.2], [-122, 0.34, 0.15], [-58, 0.38, 0.17], [-152, 0.26, 0.13], [-28, 0.32, 0.14], [180, 0.3, 0.16], [0, 0.34, 0.15], [150, 0.24, 0.12], [30, 0.27, 0.12], [-100, 0.12, 0.22], [-70, 0.16, 0.19]]
+          .map(([deg, dist, rad]) => ({ c: Math.cos(deg * Math.PI / 180), s: Math.sin(deg * Math.PI / 180), dist: dist * E, rad: rad * E, d: 0, k: 0,
+            els: [svgEl('circle', { cx: 0, cy: 0, r: 1 }, outline), svgEl('circle', { cx: 0, cy: 0, r: 1 }, fill)] }));
+        const st = { bx: 0.95 * E, by: -1.05 * E, bop: 0, spin: 0, ray: 0, rop: 0, rise: 0, cop: 0, dot: 0.4, dop: 0 };
+        const render = () => {
+          bomb.setAttribute('transform', 'translate(' + f2(st.bx) + ' ' + f2(st.by) + ') rotate(' + f2(st.spin) + ')');
+          bomb.setAttribute('opacity', f2(st.bop));
+          const r0 = (0.06 + 0.34 * st.ray) * E, r1 = (0.12 + 0.5 * st.ray) * E;
+          RAY.forEach((q) => q.el.setAttribute('d', 'M' + f2(q.c * r0) + ' ' + f2(q.s * r0) + 'L' + f2(q.c * r1) + ' ' + f2(q.s * r1)));
+          rays.setAttribute('opacity', f2(st.rop));
+          PUFF.forEach((p) => {
+            const cx = f2(p.c * p.dist * p.d), cy = f2(p.s * p.dist * p.d - 0.3 * E * st.rise), rr = f2(Math.max(0.5, p.rad * (0.3 + 0.7 * p.k)));
+            p.els.forEach((el) => { el.setAttribute('cx', cx); el.setAttribute('cy', cy); el.setAttribute('r', rr); });
+          });
+          cloud.setAttribute('opacity', f2(st.cop));
+          place(r.dot, 0, 0, st.dot, st.dot);
+          r.dot.style.opacity = st.dop;
+        };
+        const HIT = 0.52;
+        const tl = gsap.timeline({ onUpdate: render })
+          .set(st, { bop: 1 }, 0.1)
+          .to(st, { bx: 0, duration: HIT - 0.1, ease: 'none' }, 0.1)
+          .to(st, { by: 0, duration: HIT - 0.1, ease: 'power2.in' }, 0.1)      // lobbed in; gravity takes it down
+          .to(st, { spin: 320, duration: HIT - 0.1, ease: 'none' }, 0.1)
+          .set(st, { bop: 0, rop: 1, cop: 1 }, HIT)                             // impact
+          .to(st, { ray: 1, duration: 0.3, ease: 'power3.out' }, HIT)
+          .to(st, { rop: 0, duration: 0.3, ease: 'power1.in' }, HIT)
+          .to(st, { rise: 1, duration: 1.1, ease: 'power1.out' }, HIT)
+          .to(st, { cop: 0, duration: 0.5, ease: 'power1.in' }, HIT + 0.7)      // the smoke thins
+          .set(st, { dop: 1 }, HIT + 0.22)
+          .to(st, { dot: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' }, HIT + 0.22);
+        PUFF.forEach((p, i) => tl.to(p, { d: 1, k: 1, duration: 0.95, ease: 'power3.out' }, HIT + i * 0.02));
+        render();
+        return { tl, land: HIT + 0.22, rest: HIT + 0.8 };
+      },
+
+      // a lift: a hairline car rises from under the word with the dot inside, an up-arrow over it,
+      // and eases to a stop with its floor on the baseline. the doors slide apart into the walls,
+      // the dot is there, and the car fades away around it
+      elevator(r) {
+        const CW = 0.34 * E, CH = 0.5 * E;                   // the car: just clear of the g, tall enough for the dot and some headroom
+        const car = svgEl('g', {}, r.svg);
+        svgEl('rect', { class: 'solid', x: f2(-CW / 2), y: f2(-CH), width: f2(CW), height: f2(CH) }, car);
+        const arrow = svgEl('path', { class: 'hair', d: 'M' + f2(-0.035 * E) + ' ' + f2(-CH - 0.05 * E) + 'L0 ' + f2(-CH - 0.1 * E) + 'L' + f2(0.035 * E) + ' ' + f2(-CH - 0.05 * E) }, car);
+        // the doors sit in front of the dot and are clipped to the car, so they slide out of sight into its walls
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const doors = svgEl('g', {}, front);
+        svgEl('rect', { x: f2(-CW / 2), y: f2(-CH), width: f2(CW), height: f2(CH) }, svgEl('clipPath', { id: 'intro-lift-doors' }, svgEl('defs', {}, doors)));
+        const inner = svgEl('g', { 'clip-path': 'url(#intro-lift-doors)' }, doors);
+        const dl = svgEl('rect', { class: 'solid', x: f2(-CW / 2), y: f2(-CH), width: f2(CW / 2), height: f2(CH) }, inner);
+        const dr = svgEl('rect', { class: 'solid', x: 0, y: f2(-CH), width: f2(CW / 2), height: f2(CH) }, inner);
+        const st = { y: 0.9 * E, dy: 0.9 * E, bob: 0, op: 0, open: 0, aop: 1, cop: 1 };
+        const render = () => {
+          const ty = 'translate(0 ' + f2(r.rr + st.y + st.bob) + ')';   // the car's floor sits on the baseline when y is 0
+          car.setAttribute('transform', ty); doors.setAttribute('transform', ty);
+          car.setAttribute('opacity', f2(st.cop)); doors.setAttribute('opacity', f2(st.cop));
+          arrow.setAttribute('opacity', f2(st.aop));
+          dl.setAttribute('transform', 'translate(' + f2(-st.open * CW / 2) + ' 0)');
+          dr.setAttribute('transform', 'translate(' + f2(st.open * CW / 2) + ' 0)');
+          r.rig.style.opacity = st.op;
+          place(r.dot, 0, st.dy + st.bob, 1, 1);
+        };
+        const UP = 1.1;
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { y: 0, dy: 0, duration: UP, ease: 'power2.inOut' }, 0)          // the ride up: a lift's pull, then its ease into the stop
+          .to(st, { bob: -0.03 * E, duration: 0.12, ease: 'power1.out' }, UP)      // the stop: everything carries on a touch
+          .to(st, { bob: 0, duration: 0.3, ease: 'elastic.out(1, 0.5)' }, UP + 0.12)
+          .to(st, { aop: 0, duration: 0.2, ease: 'power1.in' }, UP)                // the arrow goes out
+          .to(st, { open: 1, duration: 0.45, ease: 'power2.inOut' }, UP + 0.25)   // the doors part
+          .to(st, { cop: 0, duration: 0.45, ease: 'power1.in' }, UP + 0.95);      // and the car is simply gone
+        render();
+        return { tl, land: UP + 0.25, rest: UP + 0.8 };
       }
     };
 
     const names = Object.keys(INTROS);
-    const asked = new URLSearchParams(window.location.search).get('intro');
+    const query = new URLSearchParams(window.location.search);
+    const asked = query.get('intro'), loop = query.has('loop');   // ?loop replays the entrance for review: the page reloads a moment after the dot lands
     const pick = INTROS.hasOwnProperty(asked) ? asked : names[Math.floor(Math.random() * names.length)];
-    const rig = pick === 'bounce' ? null : makeRig();
+    const rig = makeRig();
     const intro = INTROS[pick](rig);
     const boot = gsap.timeline();
     boot.add(intro.tl, 0);
@@ -819,6 +1060,9 @@
       gsap.set(period, { clearProps: 'all' });
       if (rig) rig.dot.remove();
       takeover();
+      introOver = true;
+      if (fontsLate) dropKeeps();
+      if (loop) setTimeout(() => window.location.reload(), 1500);
     }, null, intro.rest);
     if (rig) boot.call(() => rig.rig.remove(), null, Math.max(intro.rest, intro.tl.duration()) + 0.01);
 
