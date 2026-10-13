@@ -499,7 +499,7 @@
     /* ------------------------------------------------------------------
        the entrance. the period arrives a different way on each visit: the
        brand bounce, under a parachute, on a cloud, tied to a balloon, decrypted,
-       rolling in, or out of a ninja's smoke. every one ends the same way: the dot meets the baseline,
+       rolling in, out of a ninja's smoke, or up in a lift. every one ends the same way: the dot meets the baseline,
        squashes, settles, and the orb takes its place. props are ink hairlines
        on paper, sized in em of the wordmark. ?intro=<name> picks one.
        ------------------------------------------------------------------ */
@@ -1005,6 +1005,44 @@
         PUFF.forEach((p, i) => tl.to(p, { d: 1, k: 1, duration: 0.95, ease: 'power3.out' }, HIT + i * 0.02));
         render();
         return { tl, land: HIT + 0.22, rest: HIT + 0.8 };
+      },
+
+      // a lift: a hairline car rises from under the word with the dot inside, an up-arrow over it,
+      // and eases to a stop with its floor on the baseline. the doors slide apart into the walls,
+      // the dot is there, and the car carries on down without it
+      elevator(r) {
+        const CW = 0.34 * E, CH = 0.5 * E;                   // the car: just clear of the g, tall enough for the dot and some headroom
+        const car = svgEl('g', {}, r.svg);
+        svgEl('rect', { class: 'solid', x: f2(-CW / 2), y: f2(-CH), width: f2(CW), height: f2(CH) }, car);
+        const arrow = svgEl('path', { class: 'hair', d: 'M' + f2(-0.035 * E) + ' ' + f2(-CH - 0.05 * E) + 'L0 ' + f2(-CH - 0.1 * E) + 'L' + f2(0.035 * E) + ' ' + f2(-CH - 0.05 * E) }, car);
+        // the doors sit in front of the dot and are clipped to the car, so they slide out of sight into its walls
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const doors = svgEl('g', {}, front);
+        svgEl('rect', { x: f2(-CW / 2), y: f2(-CH), width: f2(CW), height: f2(CH) }, svgEl('clipPath', { id: 'intro-lift-doors' }, svgEl('defs', {}, doors)));
+        const inner = svgEl('g', { 'clip-path': 'url(#intro-lift-doors)' }, doors);
+        const dl = svgEl('rect', { class: 'solid', x: f2(-CW / 2), y: f2(-CH), width: f2(CW / 2), height: f2(CH) }, inner);
+        const dr = svgEl('rect', { class: 'solid', x: 0, y: f2(-CH), width: f2(CW / 2), height: f2(CH) }, inner);
+        const st = { y: 0.9 * E, dy: 0.9 * E, bob: 0, op: 0, open: 0, aop: 1 };
+        const render = () => {
+          const ty = 'translate(0 ' + f2(r.rr + st.y + st.bob) + ')';   // the car's floor sits on the baseline when y is 0
+          car.setAttribute('transform', ty); doors.setAttribute('transform', ty);
+          arrow.setAttribute('opacity', f2(st.aop));
+          dl.setAttribute('transform', 'translate(' + f2(-st.open * CW / 2) + ' 0)');
+          dr.setAttribute('transform', 'translate(' + f2(st.open * CW / 2) + ' 0)');
+          r.rig.style.opacity = st.op;
+          place(r.dot, 0, st.dy + st.bob, 1, 1);
+        };
+        const UP = 1.1;
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { y: 0, dy: 0, duration: UP, ease: 'power2.inOut' }, 0)          // the ride up: a lift's pull, then its ease into the stop
+          .to(st, { bob: -0.03 * E, duration: 0.12, ease: 'power1.out' }, UP)      // the stop: everything carries on a touch
+          .to(st, { bob: 0, duration: 0.3, ease: 'elastic.out(1, 0.5)' }, UP + 0.12)
+          .to(st, { aop: 0, duration: 0.2, ease: 'power1.in' }, UP)                // the arrow goes out
+          .to(st, { open: 1, duration: 0.45, ease: 'power2.inOut' }, UP + 0.25)   // the doors part
+          .to(st, { y: 0.9 * E, duration: 0.55, ease: 'power2.in' }, UP + 1.0);    // and the car goes on down without it
+        render();
+        return { tl, land: UP + 0.25, rest: UP + 0.8 };
       }
     };
 
