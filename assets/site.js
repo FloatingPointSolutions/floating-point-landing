@@ -499,7 +499,7 @@
     /* ------------------------------------------------------------------
        the entrance. the period arrives a different way on each visit: the
        brand bounce, under a parachute, on a cloud, tied to a balloon, decrypted,
-       or rolling in. every one ends the same way: the dot meets the baseline,
+       rolling in, or out of a ninja's smoke. every one ends the same way: the dot meets the baseline,
        squashes, settles, and the orb takes its place. props are ink hairlines
        on paper, sized in em of the wordmark. ?intro=<name> picks one.
        ------------------------------------------------------------------ */
@@ -953,6 +953,58 @@
           .to(st, { sx: 1, sy: 1, duration: 0.5, ease: 'elastic.out(1.1, 0.45)' }, T1 + 0.5);
         render();
         return { tl, land: T1, rest: T1 + 1.0 };
+      },
+
+      // a ninja's entrance: a little bomb is lobbed in from off the right and hits the baseline
+      // where the period belongs. a burst of smoke, drawn as outlined puffs that spread, rise and
+      // thin out, and when it clears the dot is simply there
+      smoke(r) {
+        const bomb = svgEl('g', {}, r.svg);
+        svgEl('circle', { class: 'solid', cx: 0, cy: 0, r: f2(0.045 * E) }, bomb);
+        svgEl('path', { class: 'hair', d: 'M0 ' + f2(-0.04 * E) + 'Q' + f2(0.02 * E) + ' ' + f2(-0.11 * E) + ' ' + f2(0.08 * E) + ' ' + f2(-0.1 * E) }, bomb);   // the fuse
+        const rays = svgEl('g', { class: 'soft' }, r.svg);
+        const RAY = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => { const a = (i + 0.5) * Math.PI / 4; return { c: Math.cos(a), s: Math.sin(a), el: svgEl('path', { class: 'hair' }, rays) }; });
+        // the smoke sits in front of the dot, so the dot is hidden until the puffs have spread.
+        // the same outline trick as the cloud: every puff stroked at double weight, then filled
+        // over, so the lot reads as one shape with one edge
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const cloud = svgEl('g', {}, front);
+        const outline = svgEl('g', { class: 'hair double' }, cloud), fill = svgEl('g', { class: 'cloud-fill' }, cloud);
+        // angle, how far it travels, how big it grows: most of it goes up, two big ones sit over the dot at first
+        const PUFF = [[-90, 0.3, 0.2], [-122, 0.34, 0.15], [-58, 0.38, 0.17], [-152, 0.26, 0.13], [-28, 0.32, 0.14], [180, 0.3, 0.16], [0, 0.34, 0.15], [150, 0.24, 0.12], [30, 0.27, 0.12], [-100, 0.12, 0.22], [-70, 0.16, 0.19]]
+          .map(([deg, dist, rad]) => ({ c: Math.cos(deg * Math.PI / 180), s: Math.sin(deg * Math.PI / 180), dist: dist * E, rad: rad * E, d: 0, k: 0,
+            els: [svgEl('circle', { cx: 0, cy: 0, r: 1 }, outline), svgEl('circle', { cx: 0, cy: 0, r: 1 }, fill)] }));
+        const st = { bx: 0.95 * E, by: -1.05 * E, bop: 0, spin: 0, ray: 0, rop: 0, rise: 0, cop: 0, dot: 0.4, dop: 0 };
+        const render = () => {
+          bomb.setAttribute('transform', 'translate(' + f2(st.bx) + ' ' + f2(st.by) + ') rotate(' + f2(st.spin) + ')');
+          bomb.setAttribute('opacity', f2(st.bop));
+          const r0 = (0.06 + 0.34 * st.ray) * E, r1 = (0.12 + 0.5 * st.ray) * E;
+          RAY.forEach((q) => q.el.setAttribute('d', 'M' + f2(q.c * r0) + ' ' + f2(q.s * r0) + 'L' + f2(q.c * r1) + ' ' + f2(q.s * r1)));
+          rays.setAttribute('opacity', f2(st.rop));
+          PUFF.forEach((p) => {
+            const cx = f2(p.c * p.dist * p.d), cy = f2(p.s * p.dist * p.d - 0.3 * E * st.rise), rr = f2(Math.max(0.5, p.rad * (0.3 + 0.7 * p.k)));
+            p.els.forEach((el) => { el.setAttribute('cx', cx); el.setAttribute('cy', cy); el.setAttribute('r', rr); });
+          });
+          cloud.setAttribute('opacity', f2(st.cop));
+          place(r.dot, 0, 0, st.dot, st.dot);
+          r.dot.style.opacity = st.dop;
+        };
+        const HIT = 0.52;
+        const tl = gsap.timeline({ onUpdate: render })
+          .set(st, { bop: 1 }, 0.1)
+          .to(st, { bx: 0, duration: HIT - 0.1, ease: 'none' }, 0.1)
+          .to(st, { by: 0, duration: HIT - 0.1, ease: 'power2.in' }, 0.1)      // lobbed in; gravity takes it down
+          .to(st, { spin: 320, duration: HIT - 0.1, ease: 'none' }, 0.1)
+          .set(st, { bop: 0, rop: 1, cop: 1 }, HIT)                             // impact
+          .to(st, { ray: 1, duration: 0.3, ease: 'power3.out' }, HIT)
+          .to(st, { rop: 0, duration: 0.3, ease: 'power1.in' }, HIT)
+          .to(st, { rise: 1, duration: 1.1, ease: 'power1.out' }, HIT)
+          .to(st, { cop: 0, duration: 0.5, ease: 'power1.in' }, HIT + 0.7)      // the smoke thins
+          .set(st, { dop: 1 }, HIT + 0.22)
+          .to(st, { dot: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' }, HIT + 0.22);
+        PUFF.forEach((p, i) => tl.to(p, { d: 1, k: 1, duration: 0.95, ease: 'power3.out' }, HIT + i * 0.02));
+        render();
+        return { tl, land: HIT + 0.22, rest: HIT + 0.8 };
       }
     };
 
