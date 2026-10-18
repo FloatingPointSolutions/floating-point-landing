@@ -1272,7 +1272,26 @@
     const names = Object.keys(INTROS);
     const query = new URLSearchParams(window.location.search);
     const asked = query.get('intro'), loop = query.has('loop');   // ?loop replays the entrance for review: the page reloads a moment after the dot lands
-    const pick = INTROS.hasOwnProperty(asked) ? asked : names[Math.floor(Math.random() * names.length)];
+    // otherwise a shuffled round of all of them, so a refresh never plays the one just seen and
+    // every entrance comes round before any plays twice. the round is kept in this page's own
+    // history entry, which the browser keeps across a reload of the tab and drops with it: nothing
+    // goes to local storage or cookies. a new visit starts a new round
+    const nextIntro = () => {
+      let bag = [], last = null;
+      try {
+        const kept = history.state && history.state.fpIntro;
+        if (kept) { bag = (kept.bag || []).filter((n) => INTROS.hasOwnProperty(n)); last = kept.last; }
+      } catch (err) {}
+      if (!bag.length) {
+        bag = names.slice();
+        for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = bag[i]; bag[i] = bag[j]; bag[j] = t; }
+        if (bag.length > 1 && bag[0] === last) bag.push(bag.shift());   // a new round never opens with the one that closed the last
+      }
+      const next = bag.shift();
+      try { history.replaceState(Object.assign({}, history.state, { fpIntro: { bag, last: next } }), ''); } catch (err) {}
+      return next;
+    };
+    const pick = INTROS.hasOwnProperty(asked) ? asked : nextIntro();
     const rig = makeRig();
     const intro = INTROS[pick](rig);
     const boot = gsap.timeline();
