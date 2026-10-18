@@ -500,9 +500,14 @@
        the entrance. the period arrives a different way on each visit: the
        brand bounce, under a parachute, on a cloud, tied to a balloon, decrypted,
        rolling in, out of a ninja's smoke, up in a lift, in a soap bubble, out of
-       orbit, stamped, or along a number. every one ends the same way: the dot meets the baseline,
+       orbit, stamped, along a number, drawn with a compass, measured, levelled,
+       written with a nib, through an iris, as a coin, off a newton's cradle,
+       down a plinko board, off a seesaw, on a yo-yo, on a lander, as a signal
+       settling, on a radar, out of a funnel, dragged by a pointer, or on a
+       split-flap tile. every one ends the same way: the dot meets the baseline,
        squashes, settles, and the orb takes its place. props are ink hairlines
-       on paper, sized in em of the wordmark. ?intro=<name> picks one.
+       on paper, sized in em of the wordmark. the svg's origin is the dot's
+       centre at rest, so the baseline is at y = r.rr. ?intro=<name> picks one.
        ------------------------------------------------------------------ */
     const fs = parseFloat(getComputedStyle(h1).fontSize) || 160;
     const E = fs;                                        // one em of the wordmark, in px
@@ -538,6 +543,8 @@
     const touchdown = (tl, st, t, depth) => tl
       .to(st, { sy: 1 - 0.4 * depth, sx: 1 + 0.35 * depth, duration: 0.09, ease: 'power2.in' }, t)
       .to(st, { sy: 1, sx: 1, duration: 0.55, ease: 'elastic.out(1.1, 0.45)' }, t + 0.09);
+    // a throw from a to b that takes T seconds under gravity G: where it is at time t
+    const toss = (a, b, T, G) => { const vx = (b.x - a.x) / T, vy = (b.y - a.y - 0.5 * G * T * T) / T; return (t) => ({ x: a.x + vx * t, y: a.y + vy * t + 0.5 * G * t * t }); };
 
     // the word's geometry, for the bounce: where each letter is (from layout) and the shape
     // of its top (from one off-screen render of the glyph). the i is split into its stem and
@@ -1266,6 +1273,573 @@
         touchdown(tl, st, T1 + FALL, 0.8);
         render();
         return { tl, land: T1 + FALL, rest: T1 + FALL + 0.64 };
+      },
+
+      // drawn, not dropped: a drafting compass comes in from above right, plants its needle on
+      // the spot, sweeps the pencil leg once round at exactly the period's radius, the outline
+      // fills with ink, and the compass lifts away
+      compass(r) {
+        const R = r.rr, HG = 0.46 * E;                        // the hinge, above the needle point
+        // seen from the side, standing on the paper: the needle leg is fixed and the pencil leg's
+        // foot runs round the ring, which is seen from above. the usual cheat for this picture
+        const comp = svgEl('g', {}, r.svg);
+        // a leg: a slim taper from the hinge to its foot
+        const leg = (fx, fy, w) => { const dx = fx, dy = fy + HG, l = Math.hypot(dx, dy) || 1, nx = -dy / l * w / 2, ny = dx / l * w / 2; return 'M' + f2(nx) + ' ' + f2(-HG + ny) + 'L' + f2(fx) + ' ' + f2(fy) + 'L' + f2(-nx) + ' ' + f2(-HG - ny) + 'Z'; };
+        svgEl('path', { class: 'solid', d: leg(0, 0, 0.05 * E) }, comp);                                                // the needle leg
+        const pencil = svgEl('path', { class: 'solid' }, comp);                                                          // the pencil leg
+        svgEl('path', { class: 'hair', d: 'M0 ' + f2(-HG) + 'L0 ' + f2(-HG - 0.11 * E) }, comp);                   // the handle
+        svgEl('circle', { class: 'solid', cx: 0, cy: f2(-HG), r: f2(0.03 * E) }, comp);                             // the hinge
+        svgEl('circle', { class: 'solid', cx: 0, cy: f2(-HG - 0.11 * E), r: f2(0.018 * E) }, comp);               // the knob
+        const ring = svgEl('circle', { class: 'hair', r: f2(R), pathLength: 1, transform: 'rotate(-90)' }, r.svg);   // the line it draws, from the top
+        const st = { tx: 0.35 * E, ty: -0.7 * E, a: -90, drawn: 0, s: 0, op: 0, rop: 1, sx: 1, sy: 1 };
+        const render = () => {
+          const fa = st.a * Math.PI / 180;
+          pencil.setAttribute('d', leg(R * Math.cos(fa), R * Math.sin(fa), 0.05 * E));
+          comp.setAttribute('transform', 'translate(' + f2(st.tx) + ' ' + f2(st.ty) + ')');
+          comp.setAttribute('opacity', f2(st.op));
+          ring.setAttribute('stroke-dasharray', f2(st.drawn) + ' 1');
+          ring.setAttribute('opacity', st.drawn > 0 ? f2(st.rop) : 0);
+          place(r.dot, 0, R * (st.s - 1), st.s * st.sx, st.s * st.sy);   // grows about its centre
+          r.dot.style.opacity = st.s > 0 ? 1 : 0;
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { tx: 0, ty: 0, duration: 0.6, ease: 'power2.inOut' }, 0)                           // in, and the needle goes down
+          .to(st, { a: 270, drawn: 1, duration: 1.1, ease: 'power1.inOut' }, 0.75)                  // one turn
+          .to(st, { s: 1, duration: 0.3, ease: 'power2.out' }, 1.85)                                 // the ink fills
+          .to(st, { rop: 0, duration: 0.2 }, 1.95)
+          .to(st, { tx: 0.15 * E, ty: -0.3 * E, a: 290, duration: 0.5, ease: 'power2.in' }, 2.0)    // and it lifts away
+          .to(st, { op: 0, duration: 0.3, ease: 'power1.in' }, 2.2);
+        touchdown(tl, st, 2.15, 0.25);
+        render();
+        return { tl, land: 2.15, rest: 2.8 };
+      },
+
+      // measured: a vernier caliper comes in from the right with the dot already held between
+      // its jaws, squeezed to the width they read, holds for the reading, opens, and the dot
+      // springs back to round where it was put down
+      calipers(r) {
+        const R = r.rr, BY = -0.56 * E, BH = 0.07 * E, JW = 0.035 * E, OPEN = 0.36 * E, SQ = 0.84;   // SQ: how far the jaws squeeze it
+        const cal = svgEl('g', {}, r.svg);
+        svgEl('rect', { class: 'solid', x: f2(-R - JW), y: f2(BY), width: f2(1.8 * E), height: f2(BH) }, cal);   // the beam
+        const ticks = svgEl('g', { class: 'soft' }, cal);
+        for (let i = 0; i < 42; i++) { const x = -R + 0.08 * E + i * 0.04 * E; svgEl('path', { class: 'hair', d: 'M' + f2(x) + ' ' + f2(BY) + 'L' + f2(x) + ' ' + f2(BY + (i % 5 ? 0.02 : 0.035) * E) }, ticks); }
+        // a jaw: from the beam down to the baseline, tapering to its tip on the inside edge
+        const jaw = (parent, side) => svgEl('path', { class: 'solid', d: 'M0 ' + f2(BY + BH) + 'L0 ' + f2(R) + 'L' + f2(side * 0.6 * JW) + ' ' + f2(R - 0.06 * E) + 'L' + f2(side * JW) + ' ' + f2(BY + BH) + 'Z' }, parent);
+        const fixed = svgEl('g', { transform: 'translate(' + f2(-SQ * R) + ' 0)' }, cal);
+        jaw(fixed, -1);
+        const slide = svgEl('g', {}, cal);
+        svgEl('rect', { class: 'solid', x: f2(R), y: f2(BY - 0.02 * E), width: f2(0.24 * E), height: f2(BH + 0.04 * E) }, slide);
+        svgEl('circle', { class: 'solid', cx: f2(R + 0.19 * E), cy: f2(BY + BH + 0.07 * E), r: f2(0.03 * E) }, slide);   // the thumb wheel
+        const jr = svgEl('g', { transform: 'translate(' + f2(R) + ' 0)' }, slide);
+        jaw(jr, 1);
+        const read = svgEl('text', { class: 'digit', 'text-anchor': 'middle', 'font-size': f2(0.085 * E), x: f2(R + 0.12 * E), y: f2(BY - 0.06 * E) }, slide);
+        read.textContent = '0.206';
+        const away = window.innerWidth - r.vx + 0.3 * E;
+        const st = { x: away, g: -(1 - SQ) * R, rop: 0, sx: SQ, sy: 1 + (1 - SQ) * 0.8 };   // closed on the squeezed dot
+        const render = () => {
+          cal.setAttribute('transform', 'translate(' + f2(st.x) + ' 0)');
+          slide.setAttribute('transform', 'translate(' + f2(st.g) + ' 0)');
+          read.setAttribute('opacity', f2(st.rop));
+          place(r.dot, st.x, 0, st.sx, st.sy);                                   // it rides in between the jaws
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { x: 0, duration: 0.9, ease: 'power3.out' }, 0)
+          .to(st, { rop: 1, duration: 0.2 }, 1.0)
+          .to(st, { g: OPEN, duration: 0.35, ease: 'power2.in' }, 1.5)                 // let go
+          .to(st, { sx: 1, sy: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.4)' }, 1.52)
+          .to(st, { rop: 0, duration: 0.2 }, 1.5)
+          .to(st, { x: away, duration: 0.7, ease: 'power2.in' }, 1.75);
+        render();
+        return { tl, land: 1.52, rest: 2.15 };
+      },
+
+      // true: a spirit level lies along the baseline with its vial over the spot. it tips one
+      // way and then the other, the bubble running to the high end each time, settles level
+      // with the bubble dead centre, the level fades, and the bubble inks solid into the dot
+      level(r) {
+        const R = r.rr, X0 = -0.17 * E, LEN = 1.1 * E, H = 0.27 * E, VW = 0.17 * E;
+        const lev = svgEl('g', {}, r.svg);
+        svgEl('rect', { class: 'solid', x: f2(X0), y: f2(R - H), width: f2(LEN), height: f2(H) }, lev);
+        svgEl('path', { class: 'hair soft', d: 'M' + f2(X0 + 0.04 * E) + ' ' + f2(R - H + 0.035 * E) + 'L' + f2(X0 + LEN - 0.04 * E) + ' ' + f2(R - H + 0.035 * E) }, lev);   // a line along the top edge
+        svgEl('rect', { class: 'hair', x: f2(-VW), y: f2(-R - 0.015 * E), width: f2(2 * VW), height: f2(2 * R + 0.015 * E), rx: f2(0.03 * E) }, lev);   // the vial
+        [-1, 1].forEach((s) => svgEl('path', { class: 'hair', d: 'M' + f2(s * (R + 0.014 * E)) + ' ' + f2(-R - 0.015 * E) + 'L' + f2(s * (R + 0.014 * E)) + ' ' + f2(R) }, lev));   // the marks
+        const bubble = svgEl('circle', { class: 'solid', cy: 0, r: f2(0.92 * R) }, lev);
+        const st = { th: 0, bx: 0, op: 0, dop: 0, sx: 1, sy: 1 };
+        const render = () => {
+          lev.setAttribute('transform', 'rotate(' + f2(st.th) + ')');            // about the bubble's spot
+          lev.setAttribute('opacity', f2(st.op));
+          bubble.setAttribute('cx', f2(st.bx));
+          place(r.dot, 0, 0, st.sx, st.sy);
+          r.dot.style.opacity = st.dop;
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.35, ease: 'power1.out' }, 0)
+          .to(st, { th: 6, duration: 0.45, ease: 'power2.inOut' }, 0.4)            // the right end goes down
+          .to(st, { bx: -0.11 * E, duration: 0.55, ease: 'power2.out' }, 0.5)      // and the bubble runs up to the left
+          .to(st, { th: -6, duration: 0.6, ease: 'power2.inOut' }, 1.05)           // then the other way
+          .to(st, { bx: 0.11 * E, duration: 0.7, ease: 'power2.out' }, 1.15)
+          .to(st, { th: 0, duration: 0.5, ease: 'power2.inOut' }, 1.8)             // and level
+          .to(st, { bx: 0, duration: 0.9, ease: 'elastic.out(1, 0.4)' }, 1.9)      // the bubble finds the middle
+          .to(st, { op: 0, duration: 0.4, ease: 'power1.in' }, 2.6)
+          .to(st, { dop: 1, duration: 0.25, ease: 'power1.out' }, 2.65);
+        touchdown(tl, st, 2.9, 0.25);
+        render();
+        return { tl, land: 2.9, rest: 3.55 };
+      },
+
+      // written: a pen nib comes in at writing angle and hatches the period in, vertical strokes
+      // from left to right, each the height of the circle where it falls. then it lifts, with a
+      // thread of ink that snaps
+      nib(r) {
+        const R = r.rr, W = 0.065 * E, L1 = 0.16 * E, L2 = 0.3 * E, ANG = 48 * Math.PI / 180, N = 9, SW = 2 * R / N;   // N strokes, each SW wide
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const thread = svgEl('path', { class: 'hair' }, front);
+        const pen = svgEl('g', {}, front);
+        const body = svgEl('g', { transform: 'rotate(48)' }, pen);   // the barrel runs up and to the right
+        svgEl('rect', { class: 'solid', x: f2(-0.05 * E), y: f2(-1.7 * E), width: f2(0.1 * E), height: f2(1.7 * E - L2 + 0.02 * E) }, body);
+        svgEl('path', { class: 'solid', d: 'M0 0L' + f2(-W) + ' ' + f2(-L1) + 'Q' + f2(-W) + ' ' + f2(-L2) + ' 0 ' + f2(-L2) + 'Q' + f2(W) + ' ' + f2(-L2) + ' ' + f2(W) + ' ' + f2(-L1) + 'Z' }, body);
+        svgEl('path', { class: 'hair', d: 'M0 ' + f2(-0.012 * E) + 'L0 ' + f2(-0.13 * E) }, body);           // the slit
+        svgEl('circle', { class: 'hair', cx: 0, cy: f2(-0.145 * E), r: f2(0.012 * E) }, body);             // the breather hole
+        const st = { x: 0.7 * E, y: -1.0 * E, op: 0, th: 0, reveal: -R, sx: 1, sy: 1 };
+        const render = () => {
+          pen.setAttribute('transform', 'translate(' + f2(st.x) + ' ' + f2(st.y) + ')');
+          pen.setAttribute('opacity', f2(st.op));
+          place(r.dot, 0, 0, st.sx, st.sy);
+          r.dot.style.clipPath = 'inset(0 ' + f2(Math.max(0, R - st.reveal)) + 'px 0 0)';   // only the columns the nib has been over
+          // the thread: from the dot's edge, on the side of the nib, to the tip, with a little sag
+          const len = Math.hypot(st.x, st.y) || 1, ux = st.x / len, uy = st.y / len, ax = ux * R, ay = uy * R;
+          thread.setAttribute('d', 'M' + f2(ax) + ' ' + f2(ay) + 'Q' + f2((ax + st.x) / 2 + uy * 0.03 * E) + ' ' + f2((ay + st.y) / 2 - ux * 0.03 * E) + ' ' + f2(st.x) + ' ' + f2(st.y));
+          thread.setAttribute('opacity', f2(st.th));
+        };
+        const LIFT = { x: Math.sin(ANG) * 0.6 * E, y: -Math.cos(ANG) * 0.6 * E };   // away along its own axis
+        const x0 = -R + SW / 2;
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.25, ease: 'power1.out' }, 0)
+          .to(st, { x: x0, y: -0.14 * E, duration: 0.6, ease: 'power2.out' }, 0);   // in, to a hover over the left edge
+        let t = 0.65;
+        for (let k = 0; k < N; k++) {
+          const x = -R + (k + 0.5) * SW, h = Math.sqrt(Math.max(0, R * R - x * x)) * 0.98, down = k % 2 === 0;
+          const hop = k ? 0.03 : 0.12, dur = 0.035 + 0.05 * h / R;
+          tl.to(st, { x, y: down ? -h : h, duration: hop, ease: 'power1.inOut' }, t);   // over to the column, at the end the last stroke left it
+          t += hop;
+          tl.set(st, { reveal: x + SW / 2 }, t)
+            .to(st, { y: down ? h : -h, duration: dur, ease: 'power1.inOut' }, t);      // the stroke
+          t += dur;
+        }
+        tl.set(st, { reveal: R + 1, th: 1 }, t)
+          .to(st, { x: LIFT.x, y: LIFT.y, duration: 0.5, ease: 'power2.in' }, t + 0.05)   // and it lifts
+          .to(st, { th: 0, duration: 0.18, ease: 'power1.in' }, t + 0.2)                   // the thread thins and snaps
+          .to(st, { op: 0, duration: 0.3, ease: 'power1.in' }, t + 0.4);
+        touchdown(tl, st, t + 0.05, 0.2);
+        render();
+        return { tl, land: t, rest: t + 0.7 };
+      },
+
+      // an iris where the period belongs opens in two stops, as a lens finding focus, and the dot
+      // is behind it. each blade is the cap of the disc beyond a chord; closed, the caps overlap
+      // to cover everything, and the gap between them is a hexagon that grows
+      aperture(r) {
+        const RO = 0.19 * E, N = 6;
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const iris = svgEl('g', {}, front);
+        const ring = svgEl('circle', { class: 'hair', cx: 0, cy: 0, r: f2(RO) }, iris);
+        const blades = [];
+        for (let i = 0; i < N; i++) blades.push(svgEl('path', { class: 'solid' }, iris));
+        const st = { d: 0, rot: 0, bop: 1, rop: 0, sx: 1, sy: 1 };
+        const render = () => {
+          const d = Math.min(RO - 0.01, st.d), phi = Math.acos(d / RO);
+          blades.forEach((b, i) => {
+            const a = st.rot * Math.PI / 180 + i * TAU / N;
+            b.setAttribute('d', 'M' + f2(RO * Math.cos(a - phi)) + ' ' + f2(RO * Math.sin(a - phi)) + 'A' + f2(RO) + ' ' + f2(RO) + ' 0 0 1 ' + f2(RO * Math.cos(a + phi)) + ' ' + f2(RO * Math.sin(a + phi)) + 'Z');
+            b.setAttribute('opacity', f2(st.bop));
+          });
+          ring.setAttribute('opacity', f2(st.rop));
+          place(r.dot, 0, 0, st.sx, st.sy);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { rop: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { d: 0.085 * E, rot: 14, duration: 0.35, ease: 'power2.inOut' }, 0.45)   // the first stop
+          .to(st, { d: RO, rot: 40, duration: 0.45, ease: 'power2.inOut' }, 1.05)          // open
+          .to(st, { bop: 0, duration: 0.2 }, 1.4)
+          .to(st, { rop: 0, duration: 0.35, ease: 'power1.in' }, 1.65);
+        touchdown(tl, st, 1.5, 0.25);
+        render();
+        return { tl, land: 1.5, rest: 2.15 };
+      },
+
+      // a coin: dropped on its edge, it spins, slows, and whirrs flat, the rock getting faster
+      // and shallower until it is a solid disc
+      coin(r) {
+        const T0 = 0.5, T1 = 2.0, W0 = 14, W1 = 70;          // the drop, the end of the whirr, and the spin at the start and the end, in rad/s
+        const st = { y: -1.2 * E, t: 0, up: 0, k: 1, sx: 1, sy: 1 };
+        const render = () => {
+          const ph = W0 * st.t + (W1 - W0) * st.t * st.t * st.t / (3 * T1 * T1);
+          const w = 1 - (1 - Math.abs(Math.cos(ph))) * st.k;   // its width: full flips at first, then a shallower and shallower rock
+          place(r.dot, 0, st.y - st.up, w * st.sx, st.sy);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { t: T1, duration: T1, ease: 'none' }, 0)
+          .to(st, { y: 0, duration: T0, ease: 'power2.in' }, 0)
+          .to(st, { up: 0.2 * E, duration: 0.17, ease: 'power2.out' }, T0)               // one bounce on its edge
+          .to(st, { up: 0, duration: 0.2, ease: 'power2.in' }, T0 + 0.17)
+          .to(st, { k: 0, duration: T1 - T0 - 0.4, ease: 'power1.in' }, T0 + 0.4);       // the wobble dies
+        touchdown(tl, st, T0, 0.5);
+        touchdown(tl, st, T0 + 0.37, 0.3);
+        touchdown(tl, st, T1, 0.2);
+        render();
+        return { tl, land: T0, rest: T1 + 0.64 };
+      },
+
+      // a newton's cradle hangs above and to the right. the far ball swings in, the click runs
+      // through the row, and the near ball, which is the dot, comes off its string and drops
+      cradle(r) {
+        const R = r.rr, L = 0.5 * E, Y0 = -0.62 * E, X0 = 0.1 * E, N = 4, GAP = 2 * R + 0.008 * E, BY = Y0 - L;
+        const g = svgEl('g', {}, r.svg);
+        svgEl('path', { class: 'hair', d: 'M' + f2(X0 - 0.1 * E) + ' ' + f2(BY) + 'L' + f2(X0 + (N - 1) * GAP + 0.16 * E) + ' ' + f2(BY) }, g);
+        const strings = [], balls = [];
+        for (let i = 0; i < N; i++) { strings.push(svgEl('path', { class: 'hair' }, g)); balls.push(i ? svgEl('circle', { class: 'solid', r: f2(R) }, g) : null); }
+        const at = (i, th) => { const a = th * Math.PI / 180; return { x: X0 + i * GAP + L * Math.sin(a), y: BY + L * Math.cos(a), a }; };
+        const TF = 0.34, G = 12 * E;
+        const st = { far: 52, near: 0, op: 0, fly: 0, slack: 0, sx: 1, sy: 1 };
+        let flight = null;
+        const render = () => {
+          g.setAttribute('opacity', f2(st.op));
+          for (let i = 0; i < N; i++) {
+            const p = at(i, i === N - 1 ? st.far : i === 0 ? st.near : 0), top = { x: X0 + i * GAP, y: BY };
+            const end = i === 0 && flight ? { x: top.x, y: top.y + L } : { x: p.x - R * Math.sin(p.a), y: p.y - R * Math.cos(p.a) };   // let go, the near string hangs straight
+            strings[i].setAttribute('d', 'M' + f2(top.x) + ' ' + f2(top.y) + 'L' + f2(end.x) + ' ' + f2(end.y));
+            if (i === 0) {
+              strings[0].setAttribute('opacity', f2(1 - st.slack));
+              const d = flight ? flight(st.fly * TF) : p;
+              place(r.dot, d.x, d.y, st.sx, st.sy);
+            } else { balls[i].setAttribute('cx', f2(p.x)); balls[i].setAttribute('cy', f2(p.y)); }
+          }
+        };
+        const HIT = 0.95, REL = HIT + 0.1;
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { far: 0, duration: 0.5, ease: 'power2.in' }, HIT - 0.5)      // the far ball swings in
+          .to(st, { near: -11, duration: 0.1, ease: 'power1.out' }, HIT)         // the click comes through, the near one goes
+          .call(() => { flight = toss(at(0, st.near), { x: 0, y: 0 }, TF, G); }, null, REL)
+          .to(st, { fly: 1, duration: TF, ease: 'none' }, REL)
+          .to(st, { slack: 1, duration: 0.3, ease: 'power1.out' }, REL)
+          .to(st, { op: 0, duration: 0.45, ease: 'power1.in' }, REL + TF + 0.3);
+        touchdown(tl, st, REL + TF, 0.6);
+        render();
+        return { tl, land: REL + TF, rest: REL + TF + 0.64 };
+      },
+
+      // a plinko board: the dot drops in at the top right, pinballs down through four rows of
+      // pegs, a row at a time and a step left at each, and comes out exactly on its spot
+      plinko(r) {
+        const R = r.rr, PR = 0.02 * E, DX = 0.2 * E, DY = 0.22 * E, YT = -1.15 * E;
+        const board = svgEl('g', {}, r.svg);
+        for (let row = 0; row < 4; row++) for (let j = 0; j < 3; j++)
+          svgEl('circle', { class: 'solid', cx: f2(0.08 * E + (j + 0.5 * (row % 2)) * DX), cy: f2(YT + row * DY), r: f2(PR) }, board);
+        // where it touches each peg: a little left of the top, so it rolls off that way
+        const c = [0, 1, 2, 3].map((row) => ({ x: (0.48 - 0.1 * row) * E - 0.5 * (R + PR), y: YT + row * DY - 0.866 * (R + PR) }));
+        const pts = [{ x: c[0].x + 0.02 * E, y: -1.65 * E }].concat(c, [{ x: 0, y: 0 }]);
+        const T = [0.32, 0.22, 0.22, 0.22, 0.34], cum = [0];
+        T.forEach((v) => cum.push(cum[cum.length - 1] + v));
+        const END = cum[cum.length - 1], T0 = 0.3;
+        const st = { t: 0, op: 0, dop: 0, sx: 1, sy: 1 };
+        const render = () => {
+          board.setAttribute('opacity', f2(st.op));
+          let k = 0; while (k < T.length - 1 && st.t >= cum[k + 1]) k++;
+          const u = Math.min(1, (st.t - cum[k]) / T[k]), a = pts[k], b = pts[k + 1];
+          const pop = k && k < T.length - 1 ? 0.05 * E : 0;   // off a peg it pops up a touch before it falls
+          place(r.dot, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u * u - pop * Math.sin(Math.PI * u), st.sx, st.sy);
+          r.dot.style.opacity = st.dop;
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, dop: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { t: END, duration: END, ease: 'none' }, T0)
+          .to(st, { op: 0, duration: 0.5, ease: 'power1.in' }, T0 + END + 0.2);
+        cum.slice(1, -1).forEach((t) => tl
+          .to(st, { sx: 1.2, sy: 0.82, duration: 0.05, ease: 'power2.out' }, T0 + t - 0.02)
+          .to(st, { sx: 1, sy: 1, duration: 0.12, ease: 'power2.out' }, T0 + t + 0.03));
+        touchdown(tl, st, T0 + END, 0.6);
+        render();
+        return { tl, land: T0 + END, rest: T0 + END + 0.64 };
+      },
+
+      // a seesaw under the word's end: a weight drops on the far end and the dot on the near end
+      // is flung up and over, landing on its spot
+      seesaw(r) {
+        const R = r.rr, HALF = 0.36 * E, PY = 0.5 * E;        // half the plank, and the pivot's height below the dot's centre
+        const PX = Math.min(0.56 * E, window.innerWidth - r.vx - 12 - HALF - 0.06 * E);   // on a narrow screen it slides left under the word
+        const g = svgEl('g', {}, r.svg);
+        svgEl('path', { class: 'solid', d: 'M' + f2(PX - 0.07 * E) + ' ' + f2(PY + 0.12 * E) + 'L' + f2(PX) + ' ' + f2(PY) + 'L' + f2(PX + 0.07 * E) + ' ' + f2(PY + 0.12 * E) + 'Z' }, g);   // the pivot
+        const plank = svgEl('path', { class: 'hair', d: 'M' + f2(-HALF) + ' 0L' + f2(HALF) + ' 0' }, g);
+        const weight = svgEl('path', { class: 'solid', d: 'M' + f2(-0.065 * E) + ' 0L' + f2(0.065 * E) + ' 0L' + f2(0.045 * E) + ' ' + f2(-0.1 * E) + 'L' + f2(-0.045 * E) + ' ' + f2(-0.1 * E) + 'ZM' + f2(-0.022 * E) + ' ' + f2(-0.1 * E) + 'A' + f2(0.022 * E) + ' ' + f2(0.022 * E) + ' 0 0 1 ' + f2(0.022 * E) + ' ' + f2(-0.1 * E) + 'Z' }, g);   // a weight: a block with a knob
+        const tip = (side) => { const a = st.th * Math.PI / 180; return { x: PX + side * HALF * Math.cos(a), y: PY - side * HALF * Math.sin(a) }; };   // th > 0: the near end down
+        const TF = 0.62, G = 11 * E, HIT = 0.55, LAUNCH = HIT + 0.04;
+        const st = { th: 16, wy: -0.7 * E, landed: 0, op: 0, fly: 0, sx: 1, sy: 1 };
+        let flight = null;
+        const render = () => {
+          g.setAttribute('opacity', f2(st.op));
+          plank.setAttribute('transform', 'translate(' + f2(PX) + ' ' + f2(PY) + ') rotate(' + f2(-st.th) + ')');
+          const far = tip(1), near = tip(-1);
+          weight.setAttribute('transform', 'translate(' + f2(far.x) + ' ' + f2(st.landed ? far.y : st.wy) + ') rotate(' + f2(st.landed ? -st.th : 0) + ')');
+          const d = flight ? flight(st.fly * TF) : { x: near.x, y: near.y - R };
+          place(r.dot, d.x, d.y, st.sx, st.sy);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { wy: PY - HALF * Math.sin(16 * Math.PI / 180), duration: 0.45, ease: 'power2.in' }, HIT - 0.45)   // the weight drops
+          .set(st, { landed: 1 }, HIT)
+          .to(st, { th: -16, duration: 0.14, ease: 'power2.out' }, HIT)                                               // the plank flips
+          .call(() => { const n = tip(-1); flight = toss({ x: n.x, y: n.y - R }, { x: 0, y: 0 }, TF, G); }, null, LAUNCH)
+          .to(st, { fly: 1, duration: TF, ease: 'none' }, LAUNCH)
+          .to(st, { th: -13, duration: 0.5, ease: 'elastic.out(1, 0.4)' }, HIT + 0.14)
+          .to(st, { op: 0, duration: 0.5, ease: 'power1.in' }, LAUNCH + TF + 0.3);
+        touchdown(tl, st, LAUNCH + TF, 0.7);
+        render();
+        return { tl, land: LAUNCH + TF, rest: LAUNCH + TF + 0.64, copy: LAUNCH + TF + 0.2 };   // the copy waits for the plank, which sits where it comes in on a phone
+      },
+
+      // a yo-yo: dropped from a finger above, it runs down its string and back up, down again
+      // and back a shorter way, then down to sleep spinning on the baseline, and the string goes
+      // slack and falls away
+      yoyo(r) {
+        const R = r.rr, TOP = -1.25 * E;
+        const string = svgEl('path', { class: 'hair' }, r.svg);
+        const loop = svgEl('circle', { class: 'hair', cx: 0, r: f2(0.03 * E) }, r.svg);   // the finger loop
+        const st = { y: TOP + R, wob: 0, tx: 0, ty: TOP, ly: 0, slack: 0, sop: 1, lop: 1, sx: 1, sy: 1 };
+        const render = () => {
+          const x = 0.012 * E * Math.sin(st.wob * 60) * (1 - st.wob);   // the sleep: a shiver that dies down
+          place(r.dot, x, st.y, st.sx, st.sy);
+          const ex = x, ey = st.y - R * st.sy;                           // the string meets the top of the yo-yo
+          string.setAttribute('d', 'M' + f2(st.tx) + ' ' + f2(st.ty) + 'Q' + f2((st.tx + ex) / 2 + 0.12 * E * st.slack) + ' ' + f2((st.ty + ey) / 2 + 0.18 * E * st.slack) + ' ' + f2(ex) + ' ' + f2(ey));
+          string.setAttribute('opacity', f2(st.sop));
+          loop.setAttribute('cy', f2(TOP - 0.03 * E + st.ly));
+          loop.setAttribute('opacity', f2(st.lop));
+        };
+        const SLEEP = 2.25;
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { y: 0, duration: 0.45, ease: 'power2.in' }, 0.15)                       // down
+          .to(st, { y: TOP + R + 0.12 * E, duration: 0.45, ease: 'power2.out' }, 0.6)      // and back up, not quite to the hand
+          .to(st, { y: 0, duration: 0.42, ease: 'power2.in' }, 1.05)                       // down
+          .to(st, { y: TOP + R + 0.45 * E, duration: 0.4, ease: 'power2.out' }, 1.47)      // a shorter return
+          .to(st, { y: 0, duration: 0.38, ease: 'power2.in' }, 1.87)                       // and down to sleep
+          .to(st, { wob: 1, duration: 0.8, ease: 'none' }, SLEEP)
+          .to(st, { tx: R + 0.06 * E, ty: R, slack: 1, duration: 0.55, ease: 'power2.in' }, SLEEP + 0.75)   // the string lets go and falls beside it
+          .to(st, { ly: -0.1 * E, lop: 0, duration: 0.3, ease: 'power1.in' }, SLEEP + 0.75)
+          .to(st, { sop: 0, duration: 0.3, ease: 'power1.in' }, SLEEP + 1.15);
+        touchdown(tl, st, 0.6, 0.3);
+        touchdown(tl, st, 1.47, 0.3);
+        touchdown(tl, st, SLEEP, 0.45);
+        render();
+        return { tl, land: SLEEP, rest: SLEEP + 0.64 };
+      },
+
+      // a lander: the dot comes down on a flame with its legs folding out, hovers over the spot,
+      // sets down on its pads, the engine cuts, and the legs fold away
+      lander(r) {
+        const R = r.rr, LL = 1.713 * R, OUT = 38;             // leg length and angle, so the pads sit on the baseline with the dot
+        const g = svgEl('g', {}, r.svg);
+        const flame = svgEl('path', { class: 'hair' }, g);
+        const legs = [-1, 1].map((s) => {
+          const l = svgEl('g', {}, g);
+          svgEl('path', { class: 'hair', d: 'M0 0L0 ' + f2(LL) + 'M' + f2(-0.03 * E) + ' ' + f2(LL) + 'L' + f2(0.03 * E) + ' ' + f2(LL) }, l);
+          return { s, el: l };
+        });
+        const st = { x: 0.3 * E, y: -1.45 * E, leg: 0, fire: 0, bob: 0, op: 0, sx: 1, sy: 1 };
+        const render = () => {
+          const y = st.y + 0.015 * E * st.bob;
+          g.setAttribute('transform', 'translate(' + f2(st.x) + ' ' + f2(y) + ')');
+          g.setAttribute('opacity', f2(st.op));
+          legs.forEach((l) => l.el.setAttribute('transform', 'translate(' + f2(l.s * 0.72 * R) + ' ' + f2(-0.35 * R) + ') rotate(' + f2(-l.s * st.leg) + ')'));
+          const fl = st.fire * (0.75 + 0.35 * Math.random());
+          flame.setAttribute('d', 'M' + f2(-0.035 * E) + ' ' + f2(R + 0.01 * E) + 'Q0 ' + f2(R + 0.01 * E + 0.17 * E * fl) + ' ' + f2(0.035 * E) + ' ' + f2(R + 0.01 * E));
+          flame.setAttribute('opacity', st.fire > 0.01 ? 1 : 0);
+          place(r.dot, st.x, y, st.sx, st.sy);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, fire: 1, duration: 0.3, ease: 'power1.out' }, 0)
+          .to(st, { x: 0, y: -0.2 * E, duration: 1.25, ease: 'power2.out' }, 0)              // the approach, slowing
+          .to(st, { leg: OUT, duration: 0.4, ease: 'power2.inOut' }, 0.5)                    // gear down
+          .to(st, { bob: 1, duration: 0.25, ease: 'sine.inOut', yoyo: true, repeat: 1 }, 1.25)   // a hover
+          .to(st, { y: 0, duration: 0.45, ease: 'power1.in' }, 1.75)                          // set down
+          .to(st, { fire: 0, duration: 0.12 }, 2.15)                                          // engine cut
+          .to(st, { leg: 0, duration: 0.35, ease: 'power2.in' }, 2.6)                         // and the legs fold away
+          .to(st, { op: 0, duration: 0.3, ease: 'power1.in' }, 2.75);
+        touchdown(tl, st, 2.2, 0.3);
+        render();
+        return { tl, land: 2.2, rest: 2.85 };
+      },
+
+      // a signal settling: an oscilloscope trace sweeps in from the right, a sine that damps as
+      // it nears the period, on a line that thickens as it comes, until it is as wide as the dot
+      // and ends in it
+      trace(r) {
+        const R = r.rr, room = window.innerWidth - r.vx;
+        const X0 = Math.max(0.8 * E, Math.min(room + 0.2 * E, 2.4 * E)), LAM = 0.32 * E, A0 = 0.42 * E, WIN = 1.0 * E;
+        const HAIR = parseFloat(getComputedStyle(r.rig).getPropertyValue('--hair')) || 1.5;
+        const band = svgEl('path', { class: 'ink-fill' }, r.svg);
+        const yAt = (x) => { const q = x / X0; return A0 * Math.pow(q, 1.6) * Math.sin(TAU * x / LAM); };
+        const wAt = (x) => Math.max(HAIR / 2, R * Math.pow(1 - x / X0, 1.6));   // half the line's width: a hairline far out, the dot's radius at the end
+        const T = X0 / (1.7 * E);
+        const st = { h: X0, w: WIN, s: 0, sx: 1, sy: 1 };
+        const render = () => {
+          // the band: the line's two edges, offset along the normal by its half width there, and a round cap at the head
+          const x1 = Math.min(X0, st.h + st.w), step = 0.012 * E, up = [], dn = [];
+          for (let x = st.h; x <= x1; x += step) {
+            const y = yAt(x), w = wAt(x), dy = yAt(x + 0.5) - yAt(x - 0.5), len = Math.hypot(1, dy);
+            up.push(f2(x + dy * w / len) + ' ' + f2(y - w / len));
+            dn.push(f2(x - dy * w / len) + ' ' + f2(y + w / len));
+          }
+          const hw = wAt(st.h);
+          band.setAttribute('d', up.length > 1 ? 'M' + up.join('L') + 'L' + dn.reverse().join('L') + 'A' + f2(hw) + ' ' + f2(hw) + ' 0 0 1 ' + up[0] + 'Z' : 'M0 0');
+          place(r.dot, 0, R * (st.s - 1), st.s * st.sx, st.s * st.sy);
+          r.dot.style.opacity = st.s > 0 ? 1 : 0;
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { h: 0, duration: T, ease: 'none' }, 0.1)
+          .set(st, { s: 1 }, T + 0.1)                                      // the head is the dot by now: the two swap
+          .to(st, { w: 0, duration: 0.45, ease: 'power2.in' }, T + 0.1);   // and the tail catches up
+        render();
+        return { tl, land: T + 0.1, rest: T + 0.6 };
+      },
+
+      // on the scope: a radar sweeps the paper to the right of the word. each pass, the blip on
+      // the period's spot comes back stronger, and on the third it is the dot
+      radar(r) {
+        const R = r.rr, room = window.innerWidth - r.vx - 16;
+        const CX = Math.min(0.95 * E, room - 0.1 * E), RAD = CX + 0.1 * E, TURN = 0.8;
+        const g = svgEl('g', {}, r.svg);
+        [0.33, 0.66, 1].forEach((k) => svgEl('circle', { class: 'hair soft', cx: f2(CX), cy: 0, r: f2(RAD * k) }, g));
+        for (let i = 0; i < 12; i++) { const a = i * TAU / 12; svgEl('path', { class: 'hair soft', d: 'M' + f2(CX + RAD * 0.94 * Math.cos(a)) + ' ' + f2(RAD * 0.94 * Math.sin(a)) + 'L' + f2(CX + RAD * Math.cos(a)) + ' ' + f2(RAD * Math.sin(a)) }, g); }
+        svgEl('path', { class: 'hair soft', d: 'M' + f2(CX - RAD) + ' 0L' + f2(CX + RAD) + ' 0M' + f2(CX) + ' ' + f2(-RAD) + 'L' + f2(CX) + ' ' + f2(RAD) }, g);
+        const LAG = [0, 10, 22, 36];
+        const sweep = LAG.map((lag, i) => svgEl('path', { class: 'hair' + (i ? ' soft' : ''), d: 'M' + f2(CX) + ' 0L' + f2(CX + RAD) + ' 0', opacity: f2(1 - i * 0.28) }, g));
+        const pass = (k) => (0.75 + k) * TURN;               // it starts pointing up and comes round to the blip, on the left, after three quarters
+        const st = { a: -90, op: 0, dop: 0, s: 0.7, sx: 1, sy: 1 };
+        const render = () => {
+          g.setAttribute('opacity', f2(st.op));
+          sweep.forEach((el, i) => el.setAttribute('transform', 'rotate(' + f2(st.a - LAG[i]) + ' ' + f2(CX) + ' 0)'));
+          place(r.dot, 0, R * (st.s - 1), st.s * st.sx, st.s * st.sy);
+          r.dot.style.opacity = f2(st.dop);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.4, ease: 'power1.out' }, 0)
+          .to(st, { a: -90 + 360 * 2.95, duration: 2.95 * TURN, ease: 'none' }, 0)
+          .set(st, { dop: 0.55, s: 0.7 }, pass(0)).to(st, { dop: 0, duration: 0.7, ease: 'power1.in' }, pass(0) + 0.05)
+          .set(st, { dop: 0.8, s: 0.85 }, pass(1)).to(st, { dop: 0.25, duration: 0.7, ease: 'power1.in' }, pass(1) + 0.05)
+          .set(st, { dop: 1, s: 1 }, pass(2))
+          .to(st, { op: 0, duration: 0.5, ease: 'power1.in' }, pass(2) + 0.1);
+        touchdown(tl, st, pass(2), 0.35);
+        render();
+        return { tl, land: pass(2), rest: pass(2) + 0.64, copy: pass(2) + 0.25 };   // the rings reach down to where the copy comes in
+      },
+
+      // many points, one point: a stream of fog dots pours into a funnel over the word's end and
+      // swirls down its cone. the last one through is the one: it comes out of the spout grain
+      // sized and grey, drops to the baseline, and there, slowly, grows and darkens into the period
+      funnel(r) {
+        const R = r.rr, TOP = -1.05 * E, NECK = -0.5 * E, SPOUT = -0.32 * E, HW = 0.34 * E, NW = R + 0.012 * E, GR = 0.014 * E;
+        const g = svgEl('g', {}, r.svg);
+        svgEl('path', { class: 'hair', d: 'M' + f2(-HW) + ' ' + f2(TOP) + 'L' + f2(-NW) + ' ' + f2(NECK) + 'L' + f2(-NW) + ' ' + f2(SPOUT) + 'M' + f2(HW) + ' ' + f2(TOP) + 'L' + f2(NW) + ' ' + f2(NECK) + 'L' + f2(NW) + ' ' + f2(SPOUT) }, g);
+        svgEl('ellipse', { class: 'hair soft', cx: 0, cy: f2(TOP), rx: f2(HW), ry: f2(0.05 * E) }, g);   // the rim, seen from a little above
+        const IN = { x: 0.5 * E, y: TOP - 0.5 * E };          // where the stream comes from
+        const grains = [];
+        for (let i = 0; i < 16; i++) grains.push({ x0: (Math.random() * 2 - 1) * 0.8, ph: Math.random() * TAU, u: -0.4 - i * 0.06, el: svgEl('circle', { class: 'fog-fill', r: f2(GR) }, g) });
+        const st = { op: 0, y: SPOUT, s: GR / R, dop: 0, sx: 1, sy: 1 };
+        const render = () => {
+          g.setAttribute('opacity', f2(st.op));
+          grains.forEach((q) => {
+            let x, y, rr = GR;
+            if (q.u < 0) { const v = (q.u + 0.4) / 0.4; x = IN.x + (q.x0 * HW - IN.x) * v; y = IN.y + (TOP - IN.y) * v; }   // the pour
+            else { const hw = HW + (NW - HW) * q.u, ph = q.ph + TAU * 1.2 * q.u; x = 0.85 * hw * q.x0 * Math.cos(ph); y = TOP + (NECK - TOP) * q.u; rr *= 0.8 + 0.2 * Math.sin(ph); }   // round and down the cone
+            q.el.setAttribute('cx', f2(x)); q.el.setAttribute('cy', f2(y)); q.el.setAttribute('r', f2(rr));
+            q.el.setAttribute('opacity', q.u > -0.4 && q.u < 0.97 ? 1 : 0);
+          });
+          place(r.dot, 0, st.y + R * (st.s - 1), st.s * st.sx, st.s * st.sy);
+          r.dot.style.opacity = st.dop;
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.3, ease: 'power1.out' }, 0);
+        grains.forEach((q) => tl.to(q, { u: 1, duration: (1 - q.u) / 1.8, ease: 'none' }, 0.2));
+        const OUT = 0.2 + (1 + 0.4 + 15 * 0.06) / 1.8;        // the last grain is through
+        tl.set(st, { dop: 0.6 }, OUT - 0.03)                    // grey, like its neighbours
+          .to(st, { y: 0, duration: 0.3, ease: 'power2.in' }, OUT)                     // out of the spout and down
+          .to(st, { s: 1, duration: 1.2, ease: 'power1.inOut' }, OUT + 0.3)           // and it grows, slowly
+          .to(st, { dop: 1, duration: 1.0, ease: 'power1.in' }, OUT + 0.3)            // into ink
+          .to(st, { op: 0, duration: 0.5, ease: 'power1.in' }, OUT + 0.4);
+        touchdown(tl, st, OUT + 0.3, 0.5);
+        render();
+        return { tl, land: OUT + 0.3, rest: OUT + 1.6 };
+      },
+
+      // dragged into place: a pointer arrives, picks the dot up from where it sat off to the
+      // right, drags it along the baseline to its spot, lets go, and leaves
+      cursor(r) {
+        const R = r.rr, X0 = Math.min(1.1 * E, window.innerWidth - r.vx - R - 12);
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const arrow = svgEl('path', { class: 'solid', d: 'M0 0L0 ' + f2(0.19 * E) + 'L' + f2(0.045 * E) + ' ' + f2(0.15 * E) + 'L' + f2(0.08 * E) + ' ' + f2(0.22 * E) + 'L' + f2(0.11 * E) + ' ' + f2(0.205 * E) + 'L' + f2(0.078 * E) + ' ' + f2(0.135 * E) + 'L' + f2(0.135 * E) + ' ' + f2(0.135 * E) + 'Z' }, front);
+        const HX = -0.25 * R, HY = -0.3 * R;                  // where the tip holds the dot
+        const st = { ax: X0 + 0.5 * E, ay: -0.7 * E, dx: X0, lift: 0, aop: 0, sx: 1, sy: 1 };
+        const render = () => {
+          arrow.setAttribute('transform', 'translate(' + f2(st.ax) + ' ' + f2(st.ay) + ')');
+          arrow.setAttribute('opacity', f2(st.aop));
+          const s = 1 + 0.1 * st.lift;
+          place(r.dot, st.dx, -0.03 * E * st.lift + R * (s - 1), s * st.sx, s * st.sy);   // held: a touch bigger and up off the line
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { aop: 1, duration: 0.25, ease: 'power1.out' }, 0)
+          .to(st, { ax: X0 + HX, ay: HY, duration: 0.55, ease: 'power2.out' }, 0)          // over to it
+          .to(st, { ay: HY + 0.012 * E, duration: 0.08, ease: 'power2.in' }, 0.6)           // press
+          .to(st, { lift: 1, ay: HY - 0.03 * E, duration: 0.15, ease: 'power2.out' }, 0.68)  // pick up
+          .to(st, { dx: 0, ax: HX, duration: 0.7, ease: 'power2.inOut' }, 0.85)             // drag
+          .to(st, { lift: 0, ay: HY, duration: 0.1, ease: 'power2.in' }, 1.6)                // let go
+          .to(st, { ax: 0.45 * E, ay: -0.6 * E, duration: 0.5, ease: 'power2.in' }, 1.85)    // and off
+          .to(st, { aop: 0, duration: 0.3, ease: 'power1.in' }, 2.05);
+        touchdown(tl, st, 1.7, 0.35);
+        render();
+        return { tl, land: 1.7, rest: 2.35 };
+      },
+
+      // a split-flap tile where the period belongs clacks through a few wrong glyphs and stops
+      // on the dot. each flip is a plate falling: the top half of the old glyph goes down, and
+      // the bottom half of the new one comes down after it
+      flap(r) {
+        const W = 0.3 * E, H = 0.22 * E;                     // the tile, and each half's height; the seam is at the dot's centre
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const tile = svgEl('g', {}, front);
+        const defs = svgEl('defs', {}, tile);
+        svgEl('rect', { x: f2(-W / 2), y: f2(-H), width: f2(W), height: f2(H) }, svgEl('clipPath', { id: 'intro-flap-top' }, defs));
+        svgEl('rect', { x: f2(-W / 2), y: 0, width: f2(W), height: f2(H) }, svgEl('clipPath', { id: 'intro-flap-bot' }, defs));
+        const half = (clip) => {
+          const h = svgEl('g', { 'clip-path': 'url(#' + clip + ')' }, tile);
+          const paper = svgEl('rect', { class: 'solid', x: f2(-W / 2), y: f2(-H), width: f2(W), height: f2(2 * H) }, h);
+          const text = svgEl('text', { class: 'digit', 'text-anchor': 'middle', 'font-size': f2(0.32 * E), x: 0, y: f2(0.11 * E) }, h);
+          return { g: h, paper, text };
+        };
+        const top = half('intro-flap-top'), bot = half('intro-flap-bot'), fall = half('intro-flap-top'), rise = half('intro-flap-bot');
+        const frame = svgEl('path', { class: 'hair', d: 'M' + f2(-W / 2) + ' ' + f2(-H) + 'h' + f2(W) + 'v' + f2(2 * H) + 'h' + f2(-W) + 'Z M' + f2(-W / 2) + ' 0h' + f2(W) }, tile);
+        const G = [' ', '8', '2', ':', '4', null];           // null is the dot itself
+        const st = { k: 0, ph: 0, fop: 0, sx: 1, sy: 1 };
+        const render = () => {
+          const cur = G[st.k], nxt = G[st.k + 1], last = nxt === null;
+          top.text.textContent = nxt || ''; bot.text.textContent = st.ph >= 1 ? (nxt || '') : (cur || '');
+          top.paper.setAttribute('opacity', last && st.ph > 0 ? 0 : 1);
+          bot.paper.setAttribute('opacity', last && st.ph >= 1 ? 0 : 1);
+          fall.text.textContent = cur || ''; rise.text.textContent = nxt || '';
+          const a = st.ph < 0.5 ? 1 - 2 * st.ph : 0, b = st.ph >= 0.5 && st.ph < 1 ? 2 * st.ph - 1 : 0;
+          fall.g.setAttribute('transform', 'scale(1 ' + f2(Math.max(0.001, a)) + ')'); fall.g.setAttribute('opacity', a > 0 ? 1 : 0);
+          rise.g.setAttribute('transform', 'scale(1 ' + f2(Math.max(0.001, b)) + ')'); rise.g.setAttribute('opacity', b > 0 ? 1 : 0);
+          frame.setAttribute('opacity', f2(st.fop));
+          place(r.dot, 0, 0, st.sx, st.sy);
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { fop: 1, duration: 0.3, ease: 'power1.out' }, 0);
+        for (let k = 0; k < G.length - 1; k++) tl.set(st, { k, ph: 0 }, 0.45 + k * 0.17).to(st, { ph: 1, duration: 0.16, ease: 'none' }, 0.45 + k * 0.17);
+        const END = 0.45 + (G.length - 2) * 0.17 + 0.16;
+        tl.to(st, { fop: 0, duration: 0.4, ease: 'power1.in' }, END + 0.15);
+        touchdown(tl, st, END, 0.3);
+        render();
+        return { tl, land: END, rest: END + 0.64 };
       }
     };
 
