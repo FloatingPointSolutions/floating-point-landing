@@ -197,6 +197,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .intro-svg .solid { fill: var(--paper); stroke: currentColor; stroke-width: var(--hair, 1.5px); }
 .intro-svg .cloud-fill { fill: var(--paper); stroke: none; }
 .intro-svg .soft, .intro-svg .soft .hair { stroke-opacity: 0.5; }
+.intro-svg .ink-fill { fill: currentColor; stroke: none; }
+.intro-svg .digit { fill: var(--fog); stroke: none; font-family: var(--mono); font-weight: 400; }
 .hero-grid {
   display: grid;
   grid-template-columns: 1fr;
