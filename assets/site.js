@@ -1336,16 +1336,17 @@
         const read = svgEl('text', { class: 'digit', 'text-anchor': 'middle', 'font-size': f2(0.085 * E), x: f2(R + 0.12 * E), y: f2(BY - 0.06 * E) }, slide);
         read.textContent = '0.206';
         const away = window.innerWidth - r.vx + 0.3 * E;
-        const st = { x: away, g: -(1 - SQ) * R, rop: 0, sx: SQ, sy: 1 + (1 - SQ) * 0.8 };   // closed on the squeezed dot
+        const st = { x: away, g: -(1 - SQ) * R, rop: 0, held: 1, sx: SQ, sy: 1 + (1 - SQ) * 0.8 };   // closed on the squeezed dot
         const render = () => {
           cal.setAttribute('transform', 'translate(' + f2(st.x) + ' 0)');
           slide.setAttribute('transform', 'translate(' + f2(st.g) + ' 0)');
           read.setAttribute('opacity', f2(st.rop));
-          place(r.dot, st.x, 0, st.sx, st.sy);                                   // it rides in between the jaws
+          place(r.dot, st.held ? st.x : 0, 0, st.sx, st.sy);                     // it rides in between the jaws, and stays where it is let go
         };
         const tl = gsap.timeline({ onUpdate: render })
           .to(st, { x: 0, duration: 0.9, ease: 'power3.out' }, 0)
           .to(st, { rop: 1, duration: 0.2 }, 1.0)
+          .set(st, { held: 0 }, 1.5)
           .to(st, { g: OPEN, duration: 0.35, ease: 'power2.in' }, 1.5)                 // let go
           .to(st, { sx: 1, sy: 1, duration: 0.6, ease: 'elastic.out(1.1, 0.4)' }, 1.52)
           .to(st, { rop: 0, duration: 0.2 }, 1.5)
@@ -1356,36 +1357,44 @@
 
       // true: a spirit level lies along the baseline with its vial over the spot. it tips one
       // way and then the other, the bubble running to the high end each time, settles level
-      // with the bubble dead centre, the level fades, and the bubble inks solid into the dot
+      // with the bubble dead centre, the level fades, and the bubble is the dot: it rounds off
+      // and settles onto the line
       level(r) {
-        const R = r.rr, X0 = -0.17 * E, LEN = 1.1 * E, H = 0.27 * E, VW = 0.17 * E;
+        const R = r.rr, X0 = -0.17 * E, LEN = 1.1 * E, H = 0.27 * E, VW = 0.155 * E, VT = -R - 0.015 * E;   // the vial: its half width and its top
+        const BX = 0.85 * R, BY = 0.65 * R, CY = VT + BY + 0.008 * E, MK = BX + 0.045 * E, LIM = MK - 0.004 * E;   // the bubble: a capsule pressed up against the top; the marks, and the wall they make for it
+        const PUSH = LIM - BX + 0.05 * E;                     // where the tilt sends it: into the wall, which it gives against
         const lev = svgEl('g', {}, r.svg);
         svgEl('rect', { class: 'solid', x: f2(X0), y: f2(R - H), width: f2(LEN), height: f2(H) }, lev);
         svgEl('path', { class: 'hair soft', d: 'M' + f2(X0 + 0.04 * E) + ' ' + f2(R - H + 0.035 * E) + 'L' + f2(X0 + LEN - 0.04 * E) + ' ' + f2(R - H + 0.035 * E) }, lev);   // a line along the top edge
-        svgEl('rect', { class: 'hair', x: f2(-VW), y: f2(-R - 0.015 * E), width: f2(2 * VW), height: f2(2 * R + 0.015 * E), rx: f2(0.03 * E) }, lev);   // the vial
-        [-1, 1].forEach((s) => svgEl('path', { class: 'hair', d: 'M' + f2(s * (R + 0.014 * E)) + ' ' + f2(-R - 0.015 * E) + 'L' + f2(s * (R + 0.014 * E)) + ' ' + f2(R) }, lev));   // the marks
-        const bubble = svgEl('circle', { class: 'solid', cy: 0, r: f2(0.92 * R) }, lev);
-        const st = { th: 0, bx: 0, op: 0, dop: 0, sx: 1, sy: 1 };
+        svgEl('rect', { class: 'hair', x: f2(-VW), y: f2(VT), width: f2(2 * VW), height: f2(R - VT), rx: f2(0.012 * E) }, lev);   // the vial
+        [-1, 1].forEach((s) => svgEl('path', { class: 'hair', d: 'M' + f2(s * MK) + ' ' + f2(VT) + 'L' + f2(s * MK) + ' ' + f2(R) }, lev));   // the marks: the bubble never crosses them
+        const bubble = svgEl('ellipse', { class: 'solid', cy: f2(CY), rx: f2(BX), ry: f2(BY) }, lev);
+        const st = { th: 0, bx: 0, op: 0, dop: 0, dy: 0, sx: 1, sy: 1 };
         const render = () => {
           lev.setAttribute('transform', 'rotate(' + f2(st.th) + ')');            // about the bubble's spot
           lev.setAttribute('opacity', f2(st.op));
-          bubble.setAttribute('cx', f2(st.bx));
-          place(r.dot, 0, 0, st.sx, st.sy);
+          // against a mark the bubble gives: narrower, and taller to make up for it, its edge on the line
+          let rx = BX, ry = BY, cx = st.bx;
+          const over = Math.abs(st.bx) + BX - LIM;
+          if (over > 0) { rx = Math.max(0.55 * BX, BX - 0.7 * over); ry = BY * Math.sqrt(BX / rx); cx = Math.sign(st.bx) * (LIM - rx); }
+          bubble.setAttribute('cx', f2(cx)); bubble.setAttribute('cy', f2(VT + ry + 0.008 * E));
+          bubble.setAttribute('rx', f2(rx)); bubble.setAttribute('ry', f2(ry));
+          place(r.dot, 0, st.dy, st.sx, st.sy);
           r.dot.style.opacity = st.dop;
         };
         const tl = gsap.timeline({ onUpdate: render })
           .to(st, { op: 1, duration: 0.35, ease: 'power1.out' }, 0)
-          .to(st, { th: 6, duration: 0.45, ease: 'power2.inOut' }, 0.4)            // the right end goes down
-          .to(st, { bx: -0.11 * E, duration: 0.55, ease: 'power2.out' }, 0.5)      // and the bubble runs up to the left
-          .to(st, { th: -6, duration: 0.6, ease: 'power2.inOut' }, 1.05)           // then the other way
-          .to(st, { bx: 0.11 * E, duration: 0.7, ease: 'power2.out' }, 1.15)
+          .to(st, { th: 4, duration: 0.45, ease: 'power2.inOut' }, 0.4)            // the right end goes down
+          .to(st, { bx: -PUSH, duration: 0.55, ease: 'power2.out' }, 0.5)          // and the bubble runs up to the left, into the wall
+          .to(st, { th: -4, duration: 0.6, ease: 'power2.inOut' }, 1.05)           // then the other way
+          .to(st, { bx: PUSH, duration: 0.7, ease: 'power2.out' }, 1.15)
           .to(st, { th: 0, duration: 0.5, ease: 'power2.inOut' }, 1.8)             // and level
           .to(st, { bx: 0, duration: 0.9, ease: 'elastic.out(1, 0.4)' }, 1.9)      // the bubble finds the middle
-          .to(st, { op: 0, duration: 0.4, ease: 'power1.in' }, 2.6)
-          .to(st, { dop: 1, duration: 0.25, ease: 'power1.out' }, 2.65);
-        touchdown(tl, st, 2.9, 0.25);
+          .set(st, { dop: 1, sx: BX / R, sy: BY / R, dy: CY - R * (1 - BY / R) }, 2.6)   // the bubble is the dot now, the same shape in the same place
+          .to(st, { op: 0, duration: 0.35, ease: 'power1.in' }, 2.6)
+          .to(st, { sx: 1, sy: 1, dy: 0, duration: 0.7, ease: 'elastic.out(1, 0.45)' }, 2.75);   // and it rounds off and settles onto the line
         render();
-        return { tl, land: 2.9, rest: 3.55 };
+        return { tl, land: 2.75, rest: 3.45 };
       },
 
       // written: a pen nib comes in at writing angle and hatches the period in, vertical strokes
@@ -1600,36 +1609,33 @@
       },
 
       // a yo-yo: dropped from a finger above, it runs down its string and back up, down again
-      // and back a shorter way, then down to sleep spinning on the baseline, and the string goes
-      // slack and falls away
+      // and back a shorter way, then down to sleep on the baseline. the hand lowers, the string
+      // goes slack, and both are gone
       yoyo(r) {
         const R = r.rr, TOP = -1.25 * E;
         const string = svgEl('path', { class: 'hair' }, r.svg);
         const loop = svgEl('circle', { class: 'hair', cx: 0, r: f2(0.03 * E) }, r.svg);   // the finger loop
-        const st = { y: TOP + R, wob: 0, tx: 0, ty: TOP, ly: 0, slack: 0, sop: 1, lop: 1, sx: 1, sy: 1 };
+        const st = { y: TOP + R, sag: 0, ly: 0, sop: 1, lop: 1, sx: 1, sy: 1 };
         const render = () => {
-          const x = 0.012 * E * Math.sin(st.wob * 60) * (1 - st.wob);   // the sleep: a shiver that dies down
-          place(r.dot, x, st.y, st.sx, st.sy);
-          const ex = x, ey = st.y - R * st.sy;                           // the string meets the top of the yo-yo
-          string.setAttribute('d', 'M' + f2(st.tx) + ' ' + f2(st.ty) + 'Q' + f2((st.tx + ex) / 2 + 0.12 * E * st.slack) + ' ' + f2((st.ty + ey) / 2 + 0.18 * E * st.slack) + ' ' + f2(ex) + ' ' + f2(ey));
+          place(r.dot, 0, st.y, st.sx, st.sy);
+          const ty = TOP + st.ly, ey = st.y - R * st.sy;                 // from the hand to the top of the yo-yo
+          string.setAttribute('d', 'M0 ' + f2(ty) + 'Q' + f2(0.14 * E * st.sag) + ' ' + f2((ty + ey) / 2) + ' 0 ' + f2(ey));
           string.setAttribute('opacity', f2(st.sop));
-          loop.setAttribute('cy', f2(TOP - 0.03 * E + st.ly));
+          loop.setAttribute('cy', f2(ty - 0.03 * E));
           loop.setAttribute('opacity', f2(st.lop));
         };
-        const SLEEP = 2.25;
+        const SLEEP = 2.5;
         const tl = gsap.timeline({ onUpdate: render })
-          .to(st, { y: 0, duration: 0.45, ease: 'power2.in' }, 0.15)                       // down
-          .to(st, { y: TOP + R + 0.12 * E, duration: 0.45, ease: 'power2.out' }, 0.6)      // and back up, not quite to the hand
-          .to(st, { y: 0, duration: 0.42, ease: 'power2.in' }, 1.05)                       // down
-          .to(st, { y: TOP + R + 0.45 * E, duration: 0.4, ease: 'power2.out' }, 1.47)      // a shorter return
-          .to(st, { y: 0, duration: 0.38, ease: 'power2.in' }, 1.87)                       // and down to sleep
-          .to(st, { wob: 1, duration: 0.8, ease: 'none' }, SLEEP)
-          .to(st, { tx: R + 0.06 * E, ty: R, slack: 1, duration: 0.55, ease: 'power2.in' }, SLEEP + 0.75)   // the string lets go and falls beside it
-          .to(st, { ly: -0.1 * E, lop: 0, duration: 0.3, ease: 'power1.in' }, SLEEP + 0.75)
-          .to(st, { sop: 0, duration: 0.3, ease: 'power1.in' }, SLEEP + 1.15);
-        touchdown(tl, st, 0.6, 0.3);
-        touchdown(tl, st, 1.47, 0.3);
-        touchdown(tl, st, SLEEP, 0.45);
+          .to(st, { y: 0, duration: 0.5, ease: 'power1.in' }, 0.15)                        // down, unwinding
+          .to(st, { y: TOP + R + 0.12 * E, duration: 0.5, ease: 'power1.out' }, 0.65)      // and back up, not quite to the hand
+          .to(st, { y: 0, duration: 0.48, ease: 'power1.in' }, 1.15)                       // down
+          .to(st, { y: TOP + R + 0.5 * E, duration: 0.42, ease: 'power1.out' }, 1.63)      // a shorter return
+          .to(st, { y: 0, duration: 0.45, ease: 'power1.in' }, 2.05)                       // and down to sleep
+          .to(st, { sag: 1, ly: 0.2 * E, duration: 0.7, ease: 'sine.inOut' }, SLEEP + 0.5)   // the hand lowers and the string goes slack
+          .to(st, { sop: 0, lop: 0, duration: 0.4, ease: 'power1.in' }, SLEEP + 0.8);
+        touchdown(tl, st, 0.65, 0.25);
+        touchdown(tl, st, 1.63, 0.25);
+        touchdown(tl, st, SLEEP, 0.35);
         render();
         return { tl, land: SLEEP, rest: SLEEP + 0.64 };
       },
@@ -1670,37 +1676,38 @@
         return { tl, land: 2.2, rest: 2.85 };
       },
 
-      // a signal settling: an oscilloscope trace sweeps in from the right, a sine that damps as
-      // it nears the period, on a line that thickens as it comes, until it is as wide as the dot
-      // and ends in it
+      // a signal settling: an oscilloscope trace sweeps in from the right and slows as it comes,
+      // a sine that stretches out and dies down, on a line that thickens until it is as wide as
+      // the dot and ends in it. the tail thins to nothing, and catches up once the head is home
       trace(r) {
         const R = r.rr, room = window.innerWidth - r.vx;
-        const X0 = Math.max(0.8 * E, Math.min(room + 0.2 * E, 2.4 * E)), LAM = 0.32 * E, A0 = 0.42 * E, WIN = 1.0 * E;
+        const X0 = Math.max(0.8 * E, Math.min(room + 0.2 * E, 2.4 * E)), LAM = 0.3 * E, A0 = 0.4 * E, WIN = 1.1 * E, TAIL = 0.3 * E;
         const HAIR = parseFloat(getComputedStyle(r.rig).getPropertyValue('--hair')) || 1.5;
         const band = svgEl('path', { class: 'ink-fill' }, r.svg);
-        const yAt = (x) => { const q = x / X0; return A0 * Math.pow(q, 1.6) * Math.sin(TAU * x / LAM); };
-        const wAt = (x) => Math.max(HAIR / 2, R * Math.pow(1 - x / X0, 1.6));   // half the line's width: a hairline far out, the dot's radius at the end
-        const T = X0 / (1.7 * E);
+        const K = TAU * X0 / (1.7 * LAM);                     // the phase is a chirp: LAM far out, longer and longer waves nearer the dot
+        const yAt = (x) => { const q = Math.max(0, x) / X0; return A0 * q * q * Math.sin(K * Math.pow(q, 1.7)); };
+        const wAt = (x) => { const q = Math.max(0, x) / X0; return HAIR / 2 + (R - HAIR / 2) * Math.pow(1 - q, 3); };   // half the line's width
+        const T = Math.max(1.0, Math.min(1.8, X0 / (1.3 * E)));
         const st = { h: X0, w: WIN, s: 0, sx: 1, sy: 1 };
         const render = () => {
-          // the band: the line's two edges, offset along the normal by its half width there, and a round cap at the head
-          const x1 = Math.min(X0, st.h + st.w), step = 0.012 * E, up = [], dn = [];
+          // the band: the line's two edges, offset along the normal by its half width there, a round cap at the head
+          const x1 = Math.min(X0, st.h + st.w), step = 0.01 * E, up = [], dn = [];
           for (let x = st.h; x <= x1; x += step) {
-            const y = yAt(x), w = wAt(x), dy = yAt(x + 0.5) - yAt(x - 0.5), len = Math.hypot(1, dy);
+            const y = yAt(x), dy = yAt(x + 0.5) - yAt(x - 0.5), len = Math.hypot(1, dy), w = wAt(x) * smooth((x1 - x) / TAIL);
             up.push(f2(x + dy * w / len) + ' ' + f2(y - w / len));
             dn.push(f2(x - dy * w / len) + ' ' + f2(y + w / len));
           }
-          const hw = wAt(st.h);
+          const hw = wAt(st.h) * smooth((x1 - st.h) / TAIL);
           band.setAttribute('d', up.length > 1 ? 'M' + up.join('L') + 'L' + dn.reverse().join('L') + 'A' + f2(hw) + ' ' + f2(hw) + ' 0 0 1 ' + up[0] + 'Z' : 'M0 0');
           place(r.dot, 0, R * (st.s - 1), st.s * st.sx, st.s * st.sy);
           r.dot.style.opacity = st.s > 0 ? 1 : 0;
         };
         const tl = gsap.timeline({ onUpdate: render })
-          .to(st, { h: 0, duration: T, ease: 'none' }, 0.1)
+          .to(st, { h: 0, duration: T, ease: 'power2.out' }, 0.1)         // fast in, slowing to a stop
           .set(st, { s: 1 }, T + 0.1)                                      // the head is the dot by now: the two swap
-          .to(st, { w: 0, duration: 0.45, ease: 'power2.in' }, T + 0.1);   // and the tail catches up
+          .to(st, { w: 0, duration: 0.55, ease: 'power2.inOut' }, T + 0.1);   // and the tail catches up
         render();
-        return { tl, land: T + 0.1, rest: T + 0.6 };
+        return { tl, land: T + 0.1, rest: T + 0.7 };
       },
 
       // on the scope: a radar sweeps the paper to the right of the word. each pass, the blip on
