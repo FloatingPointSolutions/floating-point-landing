@@ -499,7 +499,8 @@
     /* ------------------------------------------------------------------
        the entrance. the period arrives a different way on each visit: the
        brand bounce, under a parachute, on a cloud, tied to a balloon, decrypted,
-       rolling in, out of a ninja's smoke, or up in a lift. every one ends the same way: the dot meets the baseline,
+       rolling in, out of a ninja's smoke, up in a lift, in a soap bubble, out of
+       orbit, stamped, or along a number. every one ends the same way: the dot meets the baseline,
        squashes, settles, and the orb takes its place. props are ink hairlines
        on paper, sized in em of the wordmark. ?intro=<name> picks one.
        ------------------------------------------------------------------ */
@@ -1044,6 +1045,227 @@
           .to(st, { cop: 0, duration: 0.45, ease: 'power1.in' }, UP + 0.95);      // and the car is simply gone
         render();
         return { tl, land: UP + 0.25, rest: UP + 0.8 };
+      },
+
+      // drifts down inside a soap bubble, swaying, with the dot hanging in the bottom of it like a
+      // pendulum. just above the baseline the bubble pops into a ring of short arcs and the dot
+      // drops the last little way
+      bubble(r) {
+        const D = 2.4, BR = 0.16 * E, HOVER = 0.07 * E, L = BR - r.rr - 0.012 * E;   // L: from the bubble's centre to the dot's
+        const shell = svgEl('g', {}, r.svg);
+        const skin = svgEl('ellipse', { class: 'hair', cx: 0, cy: 0, rx: f2(BR), ry: f2(BR) }, shell);
+        const hl = (a) => f2(0.7 * BR * Math.cos(a)) + ' ' + f2(0.7 * BR * Math.sin(a));
+        svgEl('path', { class: 'hair soft', d: 'M' + hl(3.4) + 'A' + f2(0.7 * BR) + ' ' + f2(0.7 * BR) + ' 0 0 1 ' + hl(4.3) }, shell);
+        const pop = svgEl('g', {}, r.svg);
+        const bits = [0, 1, 2, 3, 4, 5, 6, 7].map(() => svgEl('path', { class: 'hair' }, pop));
+        const PX = 0, PY = -HOVER - L;                      // where the bubble is when it goes
+        const st = { op: 0, x: 0.3 * E, y: -1.7 * E, ph: 0, pop: 0, bop: 1, sx: 1, sy: 1 };
+        const render = () => {
+          const fade = 1 - st.ph;
+          const sway = 0.09 * E * Math.sin(st.ph * TAU * 1.25) * fade;
+          const a = -0.3 * Math.cos(st.ph * TAU * 1.25) * fade;          // the dot lags the sway
+          const w = 0.035 * Math.sin(st.ph * TAU * 3) * fade;              // the skin wobbles
+          const bx = st.x + sway, by = st.y - L;
+          r.rig.style.opacity = st.op;
+          shell.setAttribute('transform', 'translate(' + f2(bx) + ' ' + f2(by) + ')');
+          skin.setAttribute('rx', f2(BR * (1 + w))); skin.setAttribute('ry', f2(BR * (1 - w)));
+          shell.setAttribute('opacity', f2(st.bop));
+          if (st.bop > 0) place(r.dot, bx + L * Math.sin(a), by + L * Math.cos(a), st.sx, st.sy);
+          else place(r.dot, PX, st.y, st.sx, st.sy);
+          // the pop: the skin breaks into arcs that spread out, shorten and fade
+          const R2 = BR * (1 + 0.55 * st.pop), span = 0.42 * (1 - 0.6 * st.pop);
+          bits.forEach((b, i) => {
+            const a0 = i * TAU / 8 + 0.2, a1 = a0 + span;
+            b.setAttribute('d', 'M' + f2(PX + R2 * Math.cos(a0)) + ' ' + f2(PY + R2 * Math.sin(a0)) + 'A' + f2(R2) + ' ' + f2(R2) + ' 0 0 1 ' + f2(PX + R2 * Math.cos(a1)) + ' ' + f2(PY + R2 * Math.sin(a1)));
+          });
+          pop.setAttribute('opacity', st.pop > 0 ? f2(1 - st.pop) : 0);
+        };
+        const DROP = 0.16;
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.4, ease: 'power1.out' }, 0)
+          .to(st, { x: 0, y: -HOVER, duration: D, ease: 'sine.out' }, 0)
+          .to(st, { ph: 1, duration: D, ease: 'none' }, 0)
+          .set(st, { bop: 0 }, D)
+          .to(st, { pop: 1, duration: 0.3, ease: 'power2.out' }, D)
+          .to(st, { y: 0, duration: DROP, ease: 'power2.in' }, D);
+        touchdown(tl, st, D + DROP, 0.6);
+        render();
+        return { tl, land: D + DROP, rest: D + DROP + 0.64 };
+      },
+
+      // a planet round a star. the star sits down and to the right of the word, in the empty paper
+      // past the period and under the baseline; the dot orbits it on a tilted ellipse, going behind
+      // it on the far side, with two moons of its own, the outer one with a moon of its own too.
+      // after a turn and a half the dot leaves its orbit at the right end on its own momentum,
+      // arcs up and over and drops onto its spot, while the moons fold in and the star goes out
+      orbit(r) {
+        const TILT = -14, TURNS = 1.5, TO = 1.5, TT = 0.55;   // the orbit, and the transfer to the period
+        const room = window.innerWidth - r.vx - r.rr - 12;   // the paper to the right of the period
+        const A = 0.5 * E, B = 0.32 * A, SR = 0.17 * E;      // the orbit's half axes, the star's radius
+        // low enough to pass under the g's tail; on a narrow screen it slides left under the word to
+        // stay on the page, and the further it has to go, the lower it goes
+        const C0x = Math.min(0.45 * E, room - A - 0.3 * E);
+        const C = { x: C0x, y: 0.62 * E + 0.4 * (0.45 * E - C0x) };
+        const ct = Math.cos(TILT * Math.PI / 180), sn = Math.sin(TILT * Math.PI / 180);
+        const onRing = (th) => { const lx = A * Math.cos(th), ly = B * Math.sin(th); return { x: C.x + lx * ct - ly * sn, y: C.y + lx * sn + ly * ct }; };
+        // behind the dot: the star's rays, the far half of the orbit, the star, the moons when they are behind
+        const rays = svgEl('g', { class: 'soft' }, r.svg);
+        const RAY = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => ({ a: i * TAU / 10, el: svgEl('path', { class: 'hair' }, rays) }));
+        const half = (from) => { let d = ''; for (let i = 0; i <= 24; i++) { const q = onRing(from + Math.PI * i / 24); d += (i ? 'L' : 'M') + f2(q.x) + ' ' + f2(q.y); } return d; };
+        const ringFar = svgEl('path', { class: 'hair soft', d: half(Math.PI) }, r.svg);
+        const starBack = svgEl('circle', { class: 'solid', cx: f2(C.x), cy: f2(C.y), r: f2(SR) }, r.svg);
+        // in front of the dot: the moons when they are in front, then the star again, for when the dot goes behind it, and the near half of the orbit
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const moon = (R, rad, turns, tilt, ph, parent) => ({ R, rad, turns, tilt: tilt * Math.PI / 180, ph, parent,
+          ring: parent ? null : svgEl('ellipse', { class: 'hair soft', cx: 0, cy: 0, rx: 1, ry: 1 }, r.svg),
+          back: svgEl('circle', { class: 'ink-fill', r: f2(rad) }, r.svg), fore: svgEl('circle', { class: 'ink-fill', r: f2(rad) }, front) });
+        const m1 = moon(0.2 * E, 0.026 * E, 2.6, 16, 0.6), m2 = moon(0.28 * E, 0.019 * E, -1.7, -26, 2.4);
+        const MOONS = [m1, m2, moon(0.055 * E, 0.01 * E, 4.5, 0, 1, m2)];
+        const starFront = svgEl('circle', { class: 'solid', cx: f2(C.x), cy: f2(C.y), r: f2(SR) }, front);
+        const ringNear = svgEl('path', { class: 'hair soft', d: half(0) }, front);
+        // the transfer: a cubic from the right end of the orbit, leaving at the orbit's own speed and
+        // heading, over to just above and right of the period, and down onto it
+        const TH0 = -Math.PI, TH1 = TH0 - TAU * TURNS, W = TAU * TURNS / TO;   // it goes round the other way to the clock, and leaves at the right end going up
+        const P0 = onRing(TH1), V = { x: B * W * sn, y: -B * W * ct };         // its velocity there: straight up the orbit, tilted with it
+        const P1 = { x: P0.x + V.x * TT / 3, y: P0.y + V.y * TT / 3 }, P2 = { x: 0.3 * E, y: -0.4 * E }, P3 = { x: 0, y: 0 };
+        const bez = (u) => { const v = 1 - u; return { x: v * v * v * P0.x + 3 * v * v * u * P1.x + 3 * v * u * u * P2.x + u * u * u * P3.x, y: v * v * v * P0.y + 3 * v * v * u * P1.y + 3 * v * u * u * P2.y + u * u * u * P3.y }; };
+        const st = { t: 0, op: 0, star: 0, sx: 1, sy: 1 };
+        const render = () => {
+          const t = st.t;
+          let d, z = 0;
+          if (t < TO) {
+            const th = TH0 - W * t;
+            d = onRing(th); z = Math.sin(th);
+          } else d = bez(Math.min(1, (t - TO) / TT));
+          const s = 1 + 0.12 * z;
+          r.rig.style.opacity = st.op;
+          // the star: it swells in at the start and goes out as the dot leaves
+          const sr = SR * (0.6 + 0.4 * st.star);
+          [starBack, starFront].forEach((el) => { el.setAttribute('r', f2(sr)); el.setAttribute('opacity', f2(st.star)); });
+          starFront.style.display = z < 0 ? '' : 'none';
+          rays.setAttribute('opacity', f2(st.star));
+          RAY.forEach((q) => { const a = q.a + t * 0.4, r0 = sr * 1.3, r1 = sr * 1.6; q.el.setAttribute('d', 'M' + f2(C.x + r0 * Math.cos(a)) + ' ' + f2(C.y + r0 * Math.sin(a)) + 'L' + f2(C.x + r1 * Math.cos(a)) + ' ' + f2(C.y + r1 * Math.sin(a))); });
+          ringFar.setAttribute('opacity', f2(st.star)); ringNear.setAttribute('opacity', f2(st.star));
+          // the dot; its box scales about its bottom, so lift it to keep its centre on the path
+          place(r.dot, d.x, d.y - r.rr * (1 - s), s * st.sx, s * st.sy);
+          // the moons fold in towards the dot and go during the transfer, before they could reach the word
+          const fold = 1 - smooth((t - TO) / (0.6 * TT));
+          MOONS.forEach((m) => {
+            const host = m.parent ? m.parent.at : d;
+            const R = m.parent ? m.R : r.rr + (m.R - r.rr) * fold;
+            const p = m.ph + TAU * m.turns * t, mx = R * Math.cos(p), my = 0.35 * R * Math.sin(p);
+            const mc = Math.cos(m.tilt), ms = Math.sin(m.tilt);
+            m.at = { x: host.x + mx * mc - my * ms, y: host.y + mx * ms + my * mc, z: Math.sin(p) };
+            const near = (m.parent ? m.parent.at.z : m.at.z) > 0;
+            [m.back, m.fore].forEach((el) => { el.setAttribute('cx', f2(m.at.x)); el.setAttribute('cy', f2(m.at.y)); el.setAttribute('r', f2(m.rad * (1 + 0.2 * m.at.z))); });
+            m.fore.setAttribute('opacity', near ? f2(fold) : 0);
+            m.back.setAttribute('opacity', near ? 0 : f2(fold * 0.65));
+            if (m.ring) {
+              m.ring.setAttribute('cx', f2(host.x)); m.ring.setAttribute('cy', f2(host.y));
+              m.ring.setAttribute('rx', f2(R)); m.ring.setAttribute('ry', f2(0.35 * R));
+              m.ring.setAttribute('transform', 'rotate(' + f2(m.tilt * 180 / Math.PI) + ' ' + f2(host.x) + ' ' + f2(host.y) + ')');
+              m.ring.setAttribute('opacity', f2(0.6 * fold));
+            }
+          });
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.4, ease: 'power1.out' }, 0)
+          .to(st, { star: 1, duration: 0.5, ease: 'power2.out' }, 0)
+          .to(st, { t: TO + TT, duration: TO + TT, ease: 'none' }, 0)
+          .to(st, { star: 0, duration: 0.45, ease: 'power1.in' }, TO);
+        touchdown(tl, st, TO + TT, 0.6);
+        render();
+        return { tl, land: TO + TT, rest: TO + TT + 0.64, copy: TO + 0.45 };   // the copy waits for the star to go: on a phone it sits where the lead comes in
+      },
+
+      // approved: a rubber stamp comes down on the baseline at a slant, rocks once to ink it
+      // properly, and lifts away with the dot printed where it stood
+      stamp(r) {
+        const FW = 0.3 * E, FH = 0.045 * E, MW = 0.24 * E, MH = 0.06 * E, NW = 0.07 * E, NH = 0.15 * E, KX = 0.085 * E, KY = 0.065 * E;
+        const marks = svgEl('g', { class: 'soft' }, r.svg);
+        const MARK = [-1, 1].flatMap((side) => [0.3, 0.75].map((up) => ({ side, up, el: svgEl('path', { class: 'hair' }, marks) })));
+        // the stamp sits in front of the dot, so the print only shows once it lifts. drawn with
+        // its face at y 0, from the knob down, each part over the one above it
+        const front = svgEl('svg', { class: 'intro-svg', width: 1, height: 1, focusable: 'false' }, r.rig);
+        const stamp = svgEl('g', {}, front);
+        const body = svgEl('g', {}, stamp);
+        const y3 = -FH - MH - NH;
+        svgEl('ellipse', { class: 'solid', cx: 0, cy: f2(y3 - 0.7 * KY), rx: f2(KX), ry: f2(KY) }, body);
+        svgEl('rect', { class: 'solid', x: f2(-NW / 2), y: f2(y3 - 0.1 * KY), width: f2(NW), height: f2(NH + 0.1 * KY) }, body);
+        svgEl('rect', { class: 'solid', x: f2(-MW / 2), y: f2(-FH - MH), width: f2(MW), height: f2(MH) }, body);
+        svgEl('rect', { class: 'ink-fill', x: f2(-FW / 2), y: f2(-FH), width: f2(FW), height: f2(FH) }, stamp);
+        const st = { x: 0.28 * E, y: -1.25 * E, rot: -18, sq: 1, op: 0, dop: 0, sx: 1, sy: 1, mk: 0, mop: 0 };
+        const render = () => {
+          stamp.setAttribute('transform', 'translate(' + f2(st.x) + ' ' + f2(r.rr + st.y) + ') rotate(' + f2(st.rot) + ')');
+          body.setAttribute('transform', 'translate(0 ' + f2(-FH) + ') scale(1 ' + f2(st.sq) + ') translate(0 ' + f2(FH) + ')');   // the handle gives under the press
+          stamp.setAttribute('opacity', f2(st.op));
+          MARK.forEach((m) => {
+            const x0 = m.side * (FW / 2 + 0.03 * E), y0 = r.rr - m.up * 0.12 * E, len = 0.07 * E * st.mk;
+            m.el.setAttribute('d', 'M' + f2(x0 + m.side * 0.02 * E * st.mk) + ' ' + f2(y0) + 'L' + f2(x0 + m.side * (0.02 * E * st.mk + len)) + ' ' + f2(y0 - len * m.up * 0.6));
+          });
+          marks.setAttribute('opacity', f2(st.mop));
+          place(r.dot, 0, 0, st.sx, st.sy);
+          r.dot.style.opacity = st.dop;
+        };
+        const HIT = 0.55, LIFT = HIT + 0.55;
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { op: 1, duration: 0.25, ease: 'power1.out' }, 0)
+          .to(st, { x: 0, y: 0, duration: HIT, ease: 'power3.in' }, 0)
+          .to(st, { rot: 0, duration: HIT, ease: 'power2.in' }, 0)
+          .to(st, { sq: 0.86, duration: 0.06, ease: 'power2.out' }, HIT)             // the press
+          .to(st, { sq: 1, duration: 0.3, ease: 'power2.out' }, HIT + 0.06)
+          .set(st, { dop: 1, sx: 1.22, sy: 0.8 }, HIT)                              // the print, still under the stamp
+          .set(st, { mop: 1 }, HIT)
+          .to(st, { mk: 1, duration: 0.22, ease: 'power2.out' }, HIT)
+          .to(st, { mop: 0, duration: 0.2, ease: 'power1.in' }, HIT + 0.08)
+          .to(st, { rot: 3, duration: 0.12, ease: 'sine.inOut' }, HIT + 0.1)        // rocked, to get the ink down
+          .to(st, { rot: -3, duration: 0.16, ease: 'sine.inOut' }, HIT + 0.22)
+          .to(st, { rot: 0, duration: 0.12, ease: 'sine.inOut' }, HIT + 0.38)
+          .to(st, { y: -0.95 * E, x: 0.12 * E, rot: 10, duration: 0.6, ease: 'power2.out' }, LIFT)
+          .to(st, { op: 0, duration: 0.35, ease: 'power1.in' }, LIFT + 0.15)
+          .to(st, { sx: 1, sy: 1, duration: 0.55, ease: 'elastic.out(1.1, 0.45)' }, LIFT);
+        render();
+        return { tl, land: LIFT, rest: LIFT + 0.64 };
+      },
+
+      // the floating point itself. a number is written in fog above the end of the word with the
+      // point in it, and the point floats along it a digit at a time, the digits making room
+      // (3.14159, 31.4159, 314.159 ...), until it runs off the end and drops onto the baseline
+      decimal(r) {
+        const DIG = '314159', N = DIG.length;
+        const FS = 0.26 * E, ADV = 0.6 * FS, GAP = 0.12 * E, DS = 0.5;   // the type, its advance, the room the point takes, the point's size in the number
+        const BASE = -0.74 * E;                              // the number's baseline, clear of the n and the g
+        const X0 = -(N * ADV + GAP / 2);                     // so the last slot is right over the period
+        const digits = DIG.split('').map((ch) => {
+          const t = svgEl('text', { class: 'digit', 'text-anchor': 'middle', 'font-size': f2(FS), x: 0, y: f2(BASE) }, r.svg);
+          t.textContent = ch;
+          return { el: t, op: 0, dy: 0.05 * E };
+        });
+        const st = { p: 1, dop: 0, fall: 0, s: DS, sx: 1, sy: 1 };
+        const slot = (p) => X0 + p * ADV + GAP / 2;
+        const render = () => {
+          digits.forEach((d, i) => {
+            d.el.setAttribute('x', f2(X0 + (i + 0.5) * ADV + GAP * Math.min(1, Math.max(0, i + 1 - st.p))));
+            d.el.setAttribute('y', f2(BASE + d.dy));
+            d.el.setAttribute('opacity', f2(d.op));
+          });
+          const hop = Math.sin(Math.PI * (st.p - Math.floor(st.p)));     // a little arc over each digit
+          const bottom = BASE + (r.rr - BASE) * st.fall - 0.09 * E * hop;  // where the bottom of the point is
+          place(r.dot, slot(st.p) * (1 - st.fall), bottom - r.rr, st.s * st.sx * (1 + 0.15 * hop), st.s * st.sy);
+          r.dot.style.opacity = st.dop;
+        };
+        const tl = gsap.timeline({ onUpdate: render })
+          .to(st, { dop: 1, duration: 0.3, ease: 'power1.out' }, 0.12);
+        digits.forEach((d, i) => tl.to(d, { op: 1, dy: 0, duration: 0.4, ease: 'power2.out' }, i * 0.04));
+        const HOP = 0.2, STEP = 0.28, T0 = 0.65;
+        for (let k = 1; k < N; k++) tl.to(st, { p: k + 1, duration: HOP, ease: 'power2.inOut' }, T0 + (k - 1) * STEP);
+        const T1 = T0 + (N - 1) * STEP, FALL = 0.42;
+        tl.to(st, { fall: 1, duration: FALL, ease: 'power2.in' }, T1)
+          .to(st, { s: 1, duration: FALL, ease: 'power2.in' }, T1);           // it only grows once it is clear of the 9
+        digits.forEach((d, i) => tl.to(d, { op: 0, dy: -0.04 * E, duration: 0.45, ease: 'power1.in' }, T1 + 0.1 + (N - 1 - i) * 0.04));
+        touchdown(tl, st, T1 + FALL, 0.8);
+        render();
+        return { tl, land: T1 + FALL, rest: T1 + FALL + 0.64 };
       }
     };
 
@@ -1069,7 +1291,7 @@
     // type comes in as the dot lands: lines rise in masks
     const heroSplit = SplitText.create(heroLines, { type: 'lines', mask: 'lines', linesClass: 'ln' });
     gsap.set(heroLines, { autoAlpha: 1 });
-    boot.from(heroSplit.lines, { yPercent: 110, duration: 0.9, ease: 'power3.out', stagger: 0.06 }, Math.max(0.6, intro.land - 0.8));
+    boot.from(heroSplit.lines, { yPercent: 110, duration: 0.9, ease: 'power3.out', stagger: 0.06 }, intro.copy || Math.max(0.6, intro.land - 0.8));   // an entrance can hold the copy back
     boot.fromTo(heroReveal, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.6, ease: 'power2.out', stagger: 0.08 }, '<0.3');
 
     // when scrolling stops near a section top, the page settles onto it. magnetic, not
