@@ -1,8 +1,8 @@
 # floating point
 
-> floating point (Floating Point Solutions, Lda.) is a software and cybersecurity company in Aveiro, Portugal. It designs, builds and runs software for companies of any size, from a first product to the systems a whole operation depends on, and it finds security weaknesses before someone else does, fixes them, and keeps watch afterwards. Tagline: "built to the last digit."
+> floating point (Floating Point Solutions, Lda.) is a Portuguese software and cybersecurity company, registered in Vagos, Aveiro, Portugal. It designs, builds and runs software for companies of any size, from a first product to the systems a whole operation depends on, and it finds security weaknesses before someone else does, fixes them, and keeps watch afterwards. Tagline: "built to the last digit."
 
-The site is available in English (https://www.flt.pt/) and European Portuguese (https://www.flt.pt/pt/). New work starts with a short brief sent to info@flt.pt; the team replies within two working days.
+The site is in European Portuguese by default, at https://www.flt.pt/, with an English version at https://www.flt.pt/en/. Browsers with no Portuguese among their languages are sent to the English version; /en/ always shows English. New work starts with a short brief sent to info@flt.pt; the team replies within two working days.
 
 ## Services
 
@@ -38,7 +38,7 @@ The site is available in English (https://www.flt.pt/) and European Portuguese (
 ## Contact
 - Email: info@flt.pt
 - Location: Aveiro, Portugal
-- Languages: English, Portuguese
+- Languages: Portuguese, English
 - GitHub: https://github.com/FloatingPointSolutions
 
 ## Company
@@ -49,7 +49,7 @@ The site is available in English (https://www.flt.pt/) and European Portuguese (
 - Share capital: €1,500.00
 
 ## Pages
-- [Home, English](https://www.flt.pt/): services, method, team and contact
-- [Início, Português](https://www.flt.pt/pt/): the same page in Portuguese
-- [Privacy policy](https://www.flt.pt/privacy/): what personal data the site and the company handle
-- [Política de privacidade](https://www.flt.pt/pt/privacidade/)
+- [Início, Português](https://www.flt.pt/): services, method, team and contact, in Portuguese
+- [Home, English](https://www.flt.pt/en/): the same page in English
+- [Política de privacidade](https://www.flt.pt/privacidade/): what personal data the site and the company handle
+- [Privacy policy, English](https://www.flt.pt/en/privacy/)

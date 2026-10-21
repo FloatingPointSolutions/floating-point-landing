@@ -3,30 +3,30 @@
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://www.flt.pt/</loc>
-    <lastmod>2026-10-10</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://www.flt.pt/pt/"/>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="pt-PT" href="https://www.flt.pt/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://www.flt.pt/"/>
   </url>
   <url>
-    <loc>https://www.flt.pt/pt/</loc>
-    <lastmod>2026-10-10</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://www.flt.pt/pt/"/>
+    <loc>https://www.flt.pt/en/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="pt-PT" href="https://www.flt.pt/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://www.flt.pt/"/>
   </url>
   <url>
-    <loc>https://www.flt.pt/privacy/</loc>
-    <lastmod>2026-10-10</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/privacy/"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://www.flt.pt/pt/privacidade/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.flt.pt/privacy/"/>
+    <loc>https://www.flt.pt/privacidade/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="pt-PT" href="https://www.flt.pt/privacidade/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/en/privacy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.flt.pt/privacidade/"/>
   </url>
   <url>
-    <loc>https://www.flt.pt/pt/privacidade/</loc>
-    <lastmod>2026-10-10</lastmod>
-    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/privacy/"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://www.flt.pt/pt/privacidade/"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.flt.pt/privacy/"/>
+    <loc>https://www.flt.pt/en/privacy/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <xhtml:link rel="alternate" hreflang="pt-PT" href="https://www.flt.pt/privacidade/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.flt.pt/en/privacy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://www.flt.pt/privacidade/"/>
   </url>
 </urlset>
