@@ -3,9 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- github pages sends no security headers, so the policy lives here. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<!-- github pages sends no security headers, so the policy lives here. the sha256 is the hash of the
+     inline script below: if that script changes, the hash has to change with it or the script is blocked. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-lbmw4txCcl8sTGRKr93HDqmgpC+Iey/+tAiidJKpezg='; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
+<script>
+  /* portuguese is the default. a browser with no portuguese among its languages goes on to /en/,
+     unless the reader picked a language on the switch: the pick is kept in local storage and wins.
+     crawlers are left on this page, which is complete without scripts. */
+  (function () {
+    var KEY = 'fp-lang';
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-lang]');
+      if (a) try { localStorage.setItem(KEY, a.getAttribute('data-lang')); } catch (err) {}
+    });
+    try {
+      if (/bot|crawl|spider|slurp|facebookexternalhit|lighthouse|headless/i.test(navigator.userAgent || '')) return;
+      var pick = localStorage.getItem(KEY), langs = navigator.languages || [navigator.language];
+      if (!pick && langs.length && langs[0]) {
+        pick = 'en';
+        for (var i = 0; i < langs.length; i++) if (String(langs[i]).toLowerCase().indexOf('pt') === 0) pick = 'pt';
+      }
+      if (pick === 'en') location.replace('/en/' + location.search + location.hash);
+    } catch (err) {}
+  })();
+</script>
 <title>floating point · software e cibersegurança em aveiro, portugal</title>
 <meta name="description" content="software e cibersegurança em aveiro, portugal. aplicações web e mobile, integrações e ia; avaliações de segurança, nis2, iso 27001, rgpd e ai act.">
 <link rel="canonical" href="https://www.flt.pt/">
@@ -154,7 +176,7 @@
       <a href="#brief">contacto</a>
     </nav>
     <div class="head-actions">
-      <a class="lang" href="/en/" hreflang="en" lang="en" aria-label="switch to english">en</a>
+      <a class="lang" href="/en/" hreflang="en" lang="en" data-lang="en" aria-label="switch to english">en</a>
       <a class="cta" href="#brief"><span>contactar</span> <span class="dot" aria-hidden="true"></span></a>
     </div>
   </div>

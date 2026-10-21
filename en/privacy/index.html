@@ -3,9 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- github pages sends no security headers, so the policy lives here. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<!-- github pages sends no security headers, so the policy lives here. the sha256 is the hash of the
+     inline script below: if that script changes, the hash has to change with it or the script is blocked. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-0kiILZ/yudXDLuGZfcS3TX+xgIU3VqVBwJ0QVKW8oaE='; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
+<script>
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('[data-lang]');
+    if (a) try { localStorage.setItem('fp-lang', a.getAttribute('data-lang')); } catch (err) {}
+  });
+</script>
 <title>privacy policy · floating point</title>
 <meta name="description" content="how floating point solutions, lda. handles personal data on flt.pt: no cookies, no tracking, and what happens to the emails you send us.">
 <link rel="canonical" href="https://www.flt.pt/en/privacy/">
@@ -26,7 +33,7 @@
   <div class="wrap">
     <a class="lockup" href="/en/" aria-label="floating point, home">floating.</a>
     <div class="head-actions">
-      <a class="lang" href="/privacidade/" hreflang="pt-PT" lang="pt-PT" aria-label="ver em português">pt</a>
+      <a class="lang" href="/privacidade/" hreflang="pt-PT" lang="pt-PT" data-lang="pt" aria-label="ver em português">pt</a>
       <a class="cta" href="/en/#brief"><span>request a brief</span> <span class="dot" aria-hidden="true"></span></a>
     </div>
   </div>
@@ -34,7 +41,7 @@
 
 <main class="wrap doc">
   <h1>privacy policy.</h1>
-  <span class="util updated">updated 21 october 2026</span>
+  <span class="util updated">updated 19 october 2026</span>
   <div class="body">
     <h2>who is responsible</h2>
     <p>floating point solutions, lda. (nipc 519644816), rua emigrantes, 12, santa catarina, 3840-572 vagos, portugal, registered at the conservatória do registo comercial de coimbra, is the controller of the personal data described here. for anything about this policy or your data, write to <a href="mailto:privacy@flt.pt">privacy@flt.pt</a>.</p>
@@ -55,8 +62,10 @@
     <p>we use cloudflare web analytics to know how many people visit, which pages they read, where they come from and how fast the pages load. when you load a page, a small script from cloudflare sends it the page address, the site that sent you, your browser and device type, the country inferred from your ip address and page load timings. it sets no cookies, stores nothing on your device and does not build a profile of you or follow you to other sites. we only see totals.</p>
     <p>cloudflare, inc. processes this on our behalf. the legal basis is our legitimate interest in understanding how the site is used and keeping it fast (article 6(1)(f) gdpr). cloudflare may process data in the united states and is certified under the eu-us data privacy framework; more in <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">cloudflare's privacy policy</a>. you can object at any time by blocking the script in your browser (the site works the same without it) or by writing to <a href="mailto:privacy@flt.pt">privacy@flt.pt</a>.</p>
 
-    <h2>cookies</h2>
-    <p>this site sets no cookies and stores nothing on your device. the pt / en switch is a plain link to the other version of the page.</p>
+    <h2>cookies and language</h2>
+    <p>this site sets no cookies. if you use the pt / en switch, your choice is saved in your browser's local storage (as <code>fp-lang</code>) so the site remembers it next time. it never leaves your device, and you can clear it in your browser settings.</p>
+    <p>the site is in portuguese by default. on the portuguese home page, if you have not used the switch, the site reads your browser's language setting and shows the english version when portuguese is not among your languages. that setting is not stored or sent anywhere.</p>
+    <p>both are strictly necessary for features you use, so they need no consent (article 5 of lei n.º 41/2004).</p>
 
     <h2>your rights</h2>
     <p>you can ask us for access to your data, to correct or delete it, to restrict or object to its use, or for a copy in a portable format, by writing to <a href="mailto:privacy@flt.pt">privacy@flt.pt</a>. we reply within one month.</p>
