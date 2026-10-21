@@ -2,7 +2,7 @@
 
 > floating point (Floating Point Solutions, Lda.) is a Portuguese software and cybersecurity company, registered in Vagos, Aveiro, Portugal. It designs, builds and runs software for companies of any size, from a first product to the systems a whole operation depends on, and it finds security weaknesses before someone else does, fixes them, and keeps watch afterwards. Tagline: "built to the last digit."
 
-The site is in European Portuguese by default, at https://www.flt.pt/, with an English version at https://www.flt.pt/en/. Browsers with no Portuguese among their languages are sent to the English version; /en/ always shows English. New work starts with a short brief sent to info@flt.pt; the team replies within two working days.
+The site is in European Portuguese by default, at https://www.flt.pt/, with an English version at https://www.flt.pt/en/. / always shows Portuguese and /en/ always shows English; there is no redirect by browser language. New work starts with a short brief sent to info@flt.pt; the team replies within two working days.
 
 ## Services
 

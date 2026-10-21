@@ -3,16 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- github pages sends no security headers, so the policy lives here. the sha256 is the hash of the
-     inline script below: if that script changes, the hash has to change with it or the script is blocked. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com 'sha256-0kiILZ/yudXDLuGZfcS3TX+xgIU3VqVBwJ0QVKW8oaE='; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+<!-- github pages sends no security headers, so the policy lives here. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<script>
-  document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('[data-lang]');
-    if (a) try { localStorage.setItem('fp-lang', a.getAttribute('data-lang')); } catch (err) {}
-  });
-</script>
 <title>política de privacidade · floating point</title>
 <meta name="description" content="como a floating point solutions, lda. trata dados pessoais em flt.pt: sem cookies, sem rastreamento, e o que acontece aos emails que nos envias.">
 <link rel="canonical" href="https://www.flt.pt/privacidade/">
@@ -33,7 +26,7 @@
   <div class="wrap">
     <a class="lockup" href="/" aria-label="floating point, início">floating.</a>
     <div class="head-actions">
-      <a class="lang" href="/en/privacy/" hreflang="en" lang="en" data-lang="en" aria-label="switch to english">en</a>
+      <a class="lang" href="/en/privacy/" hreflang="en" lang="en" aria-label="switch to english">en</a>
       <a class="cta" href="/#brief"><span>contactar</span> <span class="dot" aria-hidden="true"></span></a>
     </div>
   </div>
@@ -41,7 +34,7 @@
 
 <main class="wrap doc">
   <h1>política de privacidade.</h1>
-  <span class="util updated">atualizada a 19 de outubro de 2026</span>
+  <span class="util updated">atualizada a 21 de outubro de 2026</span>
   <div class="body">
     <h2>quem é responsável</h2>
     <p>a floating point solutions, lda. (nipc 519644816), com sede na rua emigrantes, 12, santa catarina, 3840-572 vagos, matriculada na conservatória do registo comercial de coimbra, é a responsável pelo tratamento dos dados pessoais aqui descritos. para qualquer questão sobre esta política ou sobre os teus dados, escreve para <a href="mailto:privacy@flt.pt">privacy@flt.pt</a>.</p>
@@ -62,10 +55,8 @@
     <p>usamos o cloudflare web analytics para saber quantas pessoas visitam o site, que páginas leem, de onde vêm e quão depressa as páginas carregam. quando abres uma página, um pequeno script da cloudflare envia-lhe o endereço da página, o site de onde vieste, o tipo de browser e de dispositivo, o país deduzido do teu endereço ip e os tempos de carregamento. não usa cookies, não guarda nada no teu dispositivo e não cria um perfil teu nem te segue noutros sites. nós só vemos totais.</p>
     <p>a cloudflare, inc. trata estes dados por nossa conta. o fundamento é o nosso interesse legítimo em perceber como o site é usado e mantê-lo rápido (artigo 6.º, n.º 1, alínea f) do rgpd). a cloudflare pode tratar dados nos estados unidos e está certificada ao abrigo do quadro de privacidade de dados ue-eua; mais informação na <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">política de privacidade da cloudflare</a>. podes opor-te a qualquer momento bloqueando o script no teu browser (o site funciona igual sem ele) ou escrevendo para <a href="mailto:privacy@flt.pt">privacy@flt.pt</a>.</p>
 
-    <h2>cookies e língua</h2>
-    <p>este site não usa cookies. se usares o botão pt / en, a tua escolha fica guardada no armazenamento local do teu browser (como <code>fp-lang</code>) para o site se lembrar dela da próxima vez. nunca sai do teu dispositivo, e podes apagá-la nas definições do browser.</p>
-    <p>o site está em português por omissão. na página inicial em português, se não tiveres usado o botão, o site lê a língua configurada no teu browser e mostra a versão inglesa quando o português não está entre as tuas línguas. essa informação não é guardada nem enviada para lado nenhum.</p>
-    <p>ambas são estritamente necessárias para funcionalidades que usas, pelo que não precisam de consentimento (artigo 5.º da lei n.º 41/2004).</p>
+    <h2>cookies</h2>
+    <p>este site não usa cookies nem guarda nada no teu dispositivo. o botão pt / en é um simples link para a outra versão da página.</p>
 
     <h2>os teus direitos</h2>
     <p>podes pedir-nos acesso aos teus dados, a sua retificação ou apagamento, a limitação ou oposição ao seu tratamento, ou uma cópia num formato portável, escrevendo para <a href="mailto:privacy@flt.pt">privacy@flt.pt</a>. respondemos no prazo de um mês.</p>
